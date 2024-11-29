@@ -237,8 +237,6 @@ class Piece:
         return promotion_map.get(self.name)
 
 
-
-
 class CustomChessBoard:
     def __init__(self):
         self.board = [[None for _ in range(11)] for _ in range(10)]
@@ -265,7 +263,7 @@ class CustomChessBoard:
         self.board[1][9] = Piece("At", "BLACK", 1, 9)
         self.board[1][10] = Piece("Kale", "BLACK", 1, 10)
 
-        # Siyah piyonlar (isimleri değiştirildi)
+        # Siyah piyonlar
         self.board[2][0] = Piece("Piyon\n Piyonu", "BLACK", 2, 0)
         self.board[2][1] = Piece("Savaş Motoru\n Piyonu", "BLACK", 2, 1)
         self.board[2][2] = Piece("deve\n Piyonu", "BLACK", 2, 2)
@@ -295,7 +293,7 @@ class CustomChessBoard:
         self.board[8][9] = Piece("At", "WHITE", 8, 9)
         self.board[8][10] = Piece("Kale", "WHITE", 8, 10)
 
-        # Beyaz piyonlar (isimleri değiştirildi)
+        # Beyaz piyonlar
         self.board[7][0] = Piece("Piyon\n Piyonu", "WHITE", 7, 0)
         self.board[7][1] = Piece("Savaş Motoru\n Piyonu", "WHITE", 7, 1)
         self.board[7][2] = Piece("Deve\n Piyonu", "WHITE", 7, 2)
