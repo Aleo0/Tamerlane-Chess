@@ -4,12 +4,11 @@ import sys
 # Pygame başlat
 pygame.init()
 
-# Kare boyutu
+# Kare boyutu ve ekran boyutları
 SQUARE_SIZE = 60
-
-# Ekran boyutları
-WIDTH = 13 * SQUARE_SIZE  # 11 normal kare + 1 ek kare (SOLDA) + 1 ek kare (SAĞDA)
+WIDTH = 13 * SQUARE_SIZE  # Oyun tahtası için
 HEIGHT = 10 * SQUARE_SIZE
+SIDEBAR_WIDTH = 250  # Yan panel genişliği
 
 # Renkler
 WHITE = (255, 255, 255)
@@ -17,11 +16,38 @@ BLACK = (0, 0, 0)
 LIGHT_BROWN = (238, 203, 162)
 DARK_BROWN = (166, 125, 92)
 GOLD = (255, 215, 0)
-GREEN = (0, 255, 0)  # Geçerli hareketleri göstermek için yeşil renk
+GREEN = (0, 255, 0)
+LIGHT_GRAY = (200, 200, 200)
+DARK_GRAY = (100, 100, 100)
 
 # Ekranı oluştur
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH + SIDEBAR_WIDTH, HEIGHT))
 pygame.display.set_caption("Timur Satrancı")
+
+# Font ayarları
+FONT_NORMAL = pygame.font.Font(None, 24)
+FONT_SMALL = pygame.font.Font(None, 18)
+
+
+class Button:
+    def __init__(self, x, y, width, height, text, color=LIGHT_GRAY, hover_color=DARK_GRAY):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.color = color
+        self.hover_color = hover_color
+        self.is_hovered = False
+
+    def draw(self, screen):
+        current_color = self.hover_color if self.is_hovered else self.color
+        pygame.draw.rect(screen, current_color, self.rect)
+        pygame.draw.rect(screen, BLACK, self.rect, 2)  # Border
+        text_surface = FONT_NORMAL.render(self.text, True, BLACK)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        screen.blit(text_surface, text_rect)
+
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEMOTION:
+            self.is_hovered = self.rect.collidepoint(event.pos)
 
 
 class Piece:
@@ -245,6 +271,12 @@ class CustomChessBoard:
         self.turn = "WHITE"
         self.check = {"WHITE": False, "BLACK": False}  # Şah durumunu takip etmek için
         self.captured_pieces = {"WHITE": [], "BLACK": []}  # Ele geçirilen taşları saklamak için
+
+        # Hamle geçmişi
+        self.move_history = []
+        self.current_move_index = -1
+
+
     def create_pieces(self):
         # Siyah taşlar
         self.board[0][0] = Piece("Fil", "BLACK", 0, 0)
@@ -395,6 +427,26 @@ class CustomChessBoard:
         piece = self.board[start_row][start_col]
         if piece:
             captured_piece = self.board[end_row][end_col]
+
+            # Hamle geçmişine kaydet
+            move_info = {
+                'start_row': start_row,
+                'start_col': start_col,
+                'end_row': end_row,
+                'end_col': end_col,
+                'piece': piece,
+                'captured_piece': captured_piece
+            }
+
+
+            # Mevcut konumdan sonraki hamleleri sil
+            if self.current_move_index < len(self.move_history) - 1:
+                self.move_history = self.move_history[:self.current_move_index + 1]
+            
+            self.move_history.append(move_info)
+            self.current_move_index += 1
+
+
         if captured_piece:
             self.captured_pieces[captured_piece.color].append(captured_piece)
         self.board[end_row][end_col] = piece
@@ -407,16 +459,97 @@ class CustomChessBoard:
             promoted_piece_name = piece.promote()
             if promoted_piece_name:
                 self.board[end_row][end_col] = Piece(promoted_piece_name, piece.color, end_row, end_col)
+
+
+
+
+    def undo_move(self):
+        if self.current_move_index >= 0:
+            move = self.move_history[self.current_move_index]
+            
+            # Taşı geri getir
+            piece = move['piece']
+            self.board[move['start_row']][move['start_col']] = piece
+            piece.row = move['start_row']
+            piece.col = move['start_col']
+            
+            # Yakalanan taşı geri getir
+            if move['captured_piece']:
+                self.board[move['end_row']][move['end_col']] = move['captured_piece']
+                self.captured_pieces[move['captured_piece'].color].remove(move['captured_piece'])
+            else:
+                self.board[move['end_row']][move['end_col']] = None
+            
+            # Sırayı değiştir
+            self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
+            
+            # Geçmiş indeksini güncelle
+            self.current_move_index -= 1
+            self.selected_piece = None
+
+    def redo_move(self):
+        if self.current_move_index < len(self.move_history) - 1:
+            self.current_move_index += 1
+            move = self.move_history[self.current_move_index]
+            
+            # Taşı ileri götür
+            piece = move['piece']
+            self.board[move['end_row']][move['end_col']] = piece
+            piece.row = move['end_row']
+            piece.col = move['end_col']
+            self.board[move['start_row']][move['start_col']] = None
+            
+            # Yakalanan taşı ekle
+            if move['captured_piece']:
+                self.captured_pieces[move['captured_piece'].color].append(move['captured_piece'])
+            
+            # Sırayı değiştir
+            self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
+            self.selected_piece = None
+
+    def draw_sidebar(self, screen):
+        # Yan paneli çiz
+        sidebar_rect = pygame.Rect(WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
+        pygame.draw.rect(screen, LIGHT_GRAY, sidebar_rect)
+        pygame.draw.line(screen, BLACK, (WIDTH, 0), (WIDTH, HEIGHT), 2)
+
+        # Sıradaki oyuncu (Türkçe)
+        turn_color = "Beyaz" if self.turn == "WHITE" else "Siyah"
+        turn_text = FONT_NORMAL.render(f"Sıra: {turn_color}", True, BLACK)
+        screen.blit(turn_text, (WIDTH + 10, 20))
+
+        # Yenilen taşlar
+        captured_text = FONT_NORMAL.render("Yenilen Taşlar:", True, BLACK)
+        screen.blit(captured_text, (WIDTH + 10, 60)) # Konumu yukarı taşıdık
+
+        # Beyaz yenilen taşlar
+        white_captured = [f"{piece.name} (Siyah)" for piece in self.captured_pieces["BLACK"]]
+        for i, piece_name in enumerate(white_captured):
+            piece_text = FONT_SMALL.render(piece_name, True, BLACK)
+            screen.blit(piece_text, (WIDTH + 10, 90 + i * 20)) # Konumu yukarı taşıdık
+
+        # Siyah yenilen taşlar
+        black_captured = [f"{piece.name} (Beyaz)" for piece in self.captured_pieces["WHITE"]]
+        for i, piece_name in enumerate(black_captured):
+            piece_text = FONT_SMALL.render(piece_name, True, BLACK)
+            screen.blit(piece_text, (WIDTH + 130, 90 + i * 20)) # Konumu yukarı taşıdık
+
+
+
                 
     def is_check(self, color):
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
         king_pos = None
+    
+        # Şah konumunu bul
         for row in range(10):
             for col in range(11):
                 piece = self.board[row][col]
                 if piece and piece.name == "Şah" and piece.color == color:
                     king_pos = (row, col)
                     break
+            if king_pos:
+                break
 
         if not king_pos:
             return False
@@ -425,37 +558,59 @@ class CustomChessBoard:
         for row in range(10):
             for col in range(11):
                 piece = self.board[row][col]
-                if piece and piece.color == opponent_color:  # Rakip taşlar
+                # Rakip taşların hareketlerini kontrol et
+                if piece and piece.color == opponent_color:
                     valid_moves = piece.get_valid_moves(self.board)
                     if king_pos in valid_moves:
                         return True
 
-                # Şahın kendi taşları tarafından tehdit edilip edilmediğini kontrol et
-                # (Bu kısım eklendi)
-                if piece and piece.color == color and piece.name != "Şah":  # Şah kendisini tehdit edemez
-                    valid_moves = piece.get_valid_moves(self.board)
-                    if king_pos in valid_moves:
-                        print(f"Şah, kendi {piece.name} taşı tarafından tehdit ediliyor!")  # Hata ayıklama için
-                        return True  # Hata durumunu simüle etmek için True döndür. Normalde bu olmamalı.
-
         return False
-def main():
-    # Satranç tahtasını oluştur
-    chess_board = CustomChessBoard()
 
-    # Ana oyun döngüsü
+
+def main():
+    chess_board = CustomChessBoard()
+    
+    # Butonları oluştur
+    undo_button = Button(WIDTH + 10, HEIGHT - 120, SIDEBAR_WIDTH - 20, 40, "Geri Al")
+    redo_button = Button(WIDTH + 10, HEIGHT - 70, SIDEBAR_WIDTH - 20, 40, "İleri Al")
+
     running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                chess_board.handle_click(event.pos)
-                chess_board.update_check_status()  # Her tıklamadan sonra şah durumunu güncelle
+            
+            # Buton hover efektleri
+            undo_button.handle_event(event)
+            redo_button.handle_event(event)
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_pos = event.pos
+                
+                # Geri Al butonu
+                if undo_button.rect.collidepoint(mouse_pos):
+                    chess_board.undo_move()
+                
+                # İleri Al butonu
+                elif redo_button.rect.collidepoint(mouse_pos):
+                    chess_board.redo_move()
+                
+                # Oyun tahtası tıklamaları
+                elif mouse_pos[0] < WIDTH:
+                    chess_board.handle_click(mouse_pos)
+                    chess_board.update_check_status()
 
         screen.fill(WHITE)
-        pygame.draw.rect(screen, LIGHT_BROWN, (0, SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+        #pygame.draw.rect(screen, LIGHT_BROWN, (0, SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))  # Bu satırın amacı nedir?
         chess_board.draw(screen)
+        
+        # Yan paneli çiz
+        chess_board.draw_sidebar(screen)
+        
+        # Butonları çiz
+        undo_button.draw(screen)
+        redo_button.draw(screen)
+
         pygame.display.flip()
 
     pygame.quit()
