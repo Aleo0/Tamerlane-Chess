@@ -97,7 +97,7 @@ class Piece:
                     moves.append((r, c))
                 elif piece.color != self.color:
                     moves.append((r, c))  # Rakip taş olsa bile hareketi ekle
-                # Aynı renkteki taşlar hala engelliyor
+                
                 r += dr
                 c += dc
                 distance += 1
@@ -163,9 +163,12 @@ class Piece:
                 if board[r][c] is None:
                     if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
                         moves.append((r, c))
+                elif board[r][c].color != self.color: # Rakip taş ise yeme hareketini ekle
+                    if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
+                        moves.append((r, c))
+                    break # Rakip taşı yedikten sonra dur
                 else:
-                    # Gözcü taşların üzerinden atlamasını engelle
-                    break
+                    break # Kendi taşına rastlarsa dur
                 r += dr
                 c += dc
         return moves
@@ -570,6 +573,47 @@ class CustomChessBoard:
                         return True
 
         return False
+    
+
+    def is_checkmate(self, color):
+        """Belirtilen renkteki şahın mat olup olmadığını kontrol eder."""
+        if not self.is_check(color):
+            return False  # Şah çekilmiyorsa mat olamaz
+
+        king_pos = None
+        for r in range(10):
+            for c in range(11):
+                piece = self.board[r][c]
+                if piece and piece.name == "Şah" and piece.color == color:
+                    king_pos = (r, c)
+                    break
+            if king_pos:
+                break
+        
+        if not king_pos: # Şah yoksa oyun biter
+            return True
+
+        # Şahın herhangi bir hamleyle tehditten kurtulabilmesi durumunda mat değil
+        for move in self.get_valid_moves(king_pos[0], king_pos[1]):
+            original_piece = self.board[move[0]][move[1]]
+            self.move_piece(king_pos[0], king_pos[1], move[0], move[1])
+            if not self.is_check(color):
+                self.move_piece(move[0], move[1], king_pos[0], king_pos[1]) # Hareketi geri al
+                if original_piece:
+                    self.board[move[0]][move[1]] = original_piece
+                return False # Mat değil
+            self.move_piece(move[0], move[1], king_pos[0], king_pos[1]) # Hareketi geri al
+            if original_piece:
+                self.board[move[0]][move[1]] = original_piece
+
+        return True # Mat
+    
+
+    def get_valid_moves(self, row, col):
+        piece = self.board[row][col]
+        if piece:
+            return piece.get_valid_moves(self.board)
+        return []
 
 
 def main():
@@ -579,44 +623,49 @@ def main():
     undo_button = Button(WIDTH + 10, HEIGHT - 120, SIDEBAR_WIDTH - 20, 40, "Geri Al")
     redo_button = Button(WIDTH + 10, HEIGHT - 70, SIDEBAR_WIDTH - 20, 40, "İleri Al")
 
+    game_over = False
     running = True
+    clock = pygame.time.Clock() # FPS kontrolü için
     while running:
-        for event in pygame.event.get():
+        for event in pygame.event.get():         
             if event.type == pygame.QUIT:
                 running = False
-            
-            # Buton hover efektleri
-            undo_button.handle_event(event)
-            redo_button.handle_event(event)
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pos = event.pos
-                
-                # Geri Al butonu
-                if undo_button.rect.collidepoint(mouse_pos):
-                    chess_board.undo_move()
-                
-                # İleri Al butonu
-                elif redo_button.rect.collidepoint(mouse_pos):
-                    chess_board.redo_move()
-                
-                # Oyun tahtası tıklamaları
-                elif mouse_pos[0] < WIDTH:
-                    chess_board.handle_click(mouse_pos)
-                    chess_board.update_check_status()
+                if event.button == 1: # Sol tıklama
+                    if undo_button.rect.collidepoint(event.pos):  # Geri al butonuna tıklandıysa
+                        chess_board.undo_move()
+                        game_over = False # Oyun geri alındığında game_over'ı False yap
+                    elif redo_button.rect.collidepoint(event.pos): # İleri al butonuna tıklandıysa
+                        chess_board.redo_move()
+                        game_over = False # Oyun ileri alındığında game_over'ı False yap
+
+                    elif not game_over: # Oyun bitmediyse hamle işle
+                        chess_board.handle_click(event.pos)
+
+
+            if event.type == pygame.MOUSEMOTION:
+                undo_button.handle_event(event) # Her zaman buton hover'ını kontrol et
+                redo_button.handle_event(event)
+
+        if chess_board.is_checkmate("WHITE"):
+            print("Siyah Kazandı!")
+            game_over = True
+        elif chess_board.is_checkmate("BLACK"):
+            print("Beyaz Kazandı!")
+            game_over = True
 
         screen.fill(WHITE)
-        #pygame.draw.rect(screen, LIGHT_BROWN, (0, SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))  # Bu satırın amacı nedir?
         chess_board.draw(screen)
-        
-        # Yan paneli çiz
         chess_board.draw_sidebar(screen)
-        
-        # Butonları çiz
+
+        # Butonları her zaman çiz
         undo_button.draw(screen)
         redo_button.draw(screen)
 
+
         pygame.display.flip()
+        clock.tick(60) # FPS'yi 60 olarak sınırla
 
     pygame.quit()
     sys.exit()
