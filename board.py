@@ -395,13 +395,19 @@ class CustomChessBoard:
         piece = self.board[start_row][start_col]
         if piece:
             captured_piece = self.board[end_row][end_col]
-            if captured_piece:
-                self.captured_pieces[captured_piece.color].append(captured_piece)
-            self.board[end_row][end_col] = piece
-            piece.row = end_row
-            piece.col = end_col
-            self.board[start_row][start_col] = None
+        if captured_piece:
+            self.captured_pieces[captured_piece.color].append(captured_piece)
+        self.board[end_row][end_col] = piece
+        piece.row = end_row
+        piece.col = end_col
+        self.board[start_row][start_col] = None
 
+        # Piyon terfisi kontrolü
+        if "Piyonu" in piece.name and (end_row == 0 or end_row == 9):  # Piyon karşı tarafa ulaştıysa
+            promoted_piece_name = piece.promote()
+            if promoted_piece_name:
+                self.board[end_row][end_col] = Piece(promoted_piece_name, piece.color, end_row, end_col)
+                
     def is_check(self, color):
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
         king_pos = None
