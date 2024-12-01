@@ -257,10 +257,15 @@ class Piece:
         "Vezir\n Piyonu": "Vezir",
         "Zürafa\n Piyonu": "Zürafa",
         "Gözcü\n Piyonu": "Gözcü",
+        "Şah\n Piyonu": "Prens", 
         "At\n Piyonu": "At",
         "Kale\n Piyonu": "Kale",
         }
         return promotion_map.get(self.name)
+    
+    def get_prens_moves(self, board):
+        return self.get_şah_moves(board) # Prens, Şah ile aynı hareketleri yapar.
+
 
 
 class CustomChessBoard:
@@ -618,3 +623,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
