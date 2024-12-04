@@ -134,11 +134,15 @@ class Piece:
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
             while 0 <= r <= 9 and 0 <= c <= 10:
-                if board[r][c] is None:
+                current_piece = board[r][c]
+                if current_piece is None:
                     if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
                         moves.append((r, c))
                 else:
-                    # Gözcü taşların üzerinden atlamasını engelle
+                    # Rakip taşı yiyebilir
+                    if current_piece.color != self.color:
+                        if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
+                            moves.append((r, c))
                     break
                 r += dr
                 c += dc
