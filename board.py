@@ -367,21 +367,26 @@ class CustomChessBoard:
             clicked_piece = self.board[row][col]
 
             if self.selected_piece:  # Bir taş zaten seçiliyse
-                if (row, col) in self.selected_piece.get_valid_moves(
-                        self.board) and self.selected_piece.color == self.turn:
+                if (row, col) in self.selected_piece.get_valid_moves(self.board) and self.selected_piece.color == self.turn:
                     original_piece = self.board[row][col]
                     original_row, original_col = self.selected_piece.row, self.selected_piece.col
+                
+                    # Hareketi geçici olarak yap
                     self.move_piece(original_row, original_col, row, col)
-
-                    if self.is_check(self.turn):  # Şah çekme kontrolü
-                        self.move_piece(row, col, original_row, original_col)  # Eğer şah çekiliyorsa hareketi geri al
+                
+                    # Şah çekme kontrolü
+                    if self.is_check(self.turn):
+                        # Eğer şah çekiliyorsa hareketi geri al
+                        self.move_piece(row, col, original_row, original_col)
+                        if original_piece:
+                            self.board[row][col] = original_piece
+                            original_piece.row = row
+                            original_piece.col = col
                         return
 
-
-
+                    # Hareket geçerli ise sırayı değiştir
                     self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
                     self.selected_piece = None  # Seçimi kaldır
-
 
                 elif clicked_piece and clicked_piece.color == self.turn:  # Başka bir kendi taşına tıklandıysa
                     self.selected_piece = clicked_piece  # Yeni taşı seç
@@ -429,14 +434,6 @@ class CustomChessBoard:
                     valid_moves = piece.get_valid_moves(self.board)
                     if king_pos in valid_moves:
                         return True
-
-                # Şahın kendi taşları tarafından tehdit edilip edilmediğini kontrol et
-                # (Bu kısım eklendi)
-                if piece and piece.color == color and piece.name != "Şah":  # Şah kendisini tehdit edemez
-                    valid_moves = piece.get_valid_moves(self.board)
-                    if king_pos in valid_moves:
-                        print(f"Şah, kendi {piece.name} taşı tarafından tehdit ediliyor!")  # Hata ayıklama için
-                        return True  # Hata durumunu simüle etmek için True döndür. Normalde bu olmamalı.
 
         return False
 def main():
