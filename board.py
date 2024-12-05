@@ -1,7 +1,7 @@
 import pygame
 import sys
 
-# Pygame başlat
+
 pygame.init()
 
 # Kare boyutu
@@ -17,7 +17,7 @@ BLACK = (0, 0, 0)
 LIGHT_BROWN = (238, 203, 162)
 DARK_BROWN = (166, 125, 92)
 GOLD = (255, 215, 0)
-GREEN = (0, 255, 0)  # Geçerli hareketleri göstermek için yeşil renk
+GREEN = (0, 255, 0)  
 
 # Ekranı oluştur
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -44,6 +44,9 @@ class Piece:
         return moves
 
     def get_valid_moves(self, board):
+        if self.name == "Prens":
+            return self.get_prens_moves(board)
+
         # Taşın None olup olmadığını kontrol et
         if self is None or self.name is None:
             return []
@@ -139,7 +142,7 @@ class Piece:
                     if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
                         moves.append((r, c))
                 else:
-                    # Rakip taşı yiyebilir
+                    
                     if current_piece.color != self.color:
                         if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
                             moves.append((r, c))
@@ -224,10 +227,17 @@ class Piece:
                 moves.append((r, c))
 
         return moves
+    
+    def get_prens_moves(self, board):
+        # Şah hareketleri ile aynı
+        directions = [(dr, dc) for dr in range(-1, 2) for dc in range(-1, 2) if (dr, dc) != (0, 0)]
+        return self._get_moves_in_direction(board, directions, max_distance=1)
+
+
 
     def promote(self):
         promotion_map = {
-        "Piyon\n Piyonu": "Piyon",  # Piyon Piyonu'nun terfi etmesi gerekiyorsa, Piyon'a terfi eder.
+        "Piyon\n Piyonu": "Piyon", 
         "Savaş Motoru\n Piyonu": "Savaş Motoru",
         "Deve\n Piyonu": "Deve",
         "Fil\n Piyonu": "Fil",
@@ -237,6 +247,7 @@ class Piece:
         "Gözcü\n Piyonu": "Gözcü",
         "At\n Piyonu": "At",
         "Kale\n Piyonu": "Kale",
+        "Şah\n Piyonu": "Prens",
         }
         return promotion_map.get(self.name)
 
@@ -269,7 +280,7 @@ class CustomChessBoard:
         self.board[1][9] = Piece("At", "BLACK", 1, 9)
         self.board[1][10] = Piece("Kale", "BLACK", 1, 10)
 
-        # Siyah piyonlar (isimleri değiştirildi)
+        # Siyah piyonlar
         self.board[2][0] = Piece("Piyon\n Piyonu", "BLACK", 2, 0)
         self.board[2][1] = Piece("Savaş Motoru\n Piyonu", "BLACK", 2, 1)
         self.board[2][2] = Piece("deve\n Piyonu", "BLACK", 2, 2)
@@ -299,7 +310,7 @@ class CustomChessBoard:
         self.board[8][9] = Piece("At", "WHITE", 8, 9)
         self.board[8][10] = Piece("Kale", "WHITE", 8, 10)
 
-        # Beyaz piyonlar (isimleri değiştirildi)
+        # Beyaz piyonlar 
         self.board[7][0] = Piece("Piyon\n Piyonu", "WHITE", 7, 0)
         self.board[7][1] = Piece("Savaş Motoru\n Piyonu", "WHITE", 7, 1)
         self.board[7][2] = Piece("Deve\n Piyonu", "WHITE", 7, 2)
@@ -343,9 +354,10 @@ class CustomChessBoard:
                         screen.blit(piece_text, piece_text_rect)
 
                     # Şah durumunu kontrol et ve efekti çiz
-                    if piece.name == "Şah" and self.check[piece.color]:
-                        pygame.draw.rect(screen, (255, 0, 0),
-                                         ((col + 1) * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+                    if piece and (piece.name == "Şah" or piece.name == "Prens"):
+                        if self.check[piece.color]:  # Şah ya da Prens tehdit altında mı?
+                            pygame.draw.rect(screen, (255, 0, 0),
+                                            ((col + 1) * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
                 # Seçili taşın geçerli hareketlerini göster
                 if self.selected_piece and (row, col) in self.selected_piece.get_valid_moves(self.board):
@@ -413,29 +425,35 @@ class CustomChessBoard:
             piece.col = end_col
             self.board[start_row][start_col] = None
 
+            # Promosyon kontrolü
+        if piece.name == "Şah\n Piyonu" and (end_row == 0 or end_row == 9):
+            self.board[end_row][end_col] = Piece("Prens", piece.color, end_row, end_col)
+
     def is_check(self, color):
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
-        king_pos = None
+        kings_positions = []  # Şah ve Prens pozisyonlarını takip edeceğiz
         for row in range(10):
             for col in range(11):
                 piece = self.board[row][col]
-                if piece and piece.name == "Şah" and piece.color == color:
-                    king_pos = (row, col)
-                    break
+                if piece and piece.color == color and (piece.name == "Şah" or piece.name == "Prens"):
+                    kings_positions.append((row, col))
 
-        if not king_pos:
+        if not kings_positions:
             return False
 
-        opponent_color = "BLACK" if color == "WHITE" else "WHITE"
-        for row in range(10):
-            for col in range(11):
-                piece = self.board[row][col]
-                if piece and piece.color == opponent_color:  # Rakip taşlar
-                    valid_moves = piece.get_valid_moves(self.board)
-                    if king_pos in valid_moves:
-                        return True
-
+        # Eğer sadece bir Şah veya Prens varsa şah çekilebilir
+        if len(kings_positions) == 1:
+            king_pos = kings_positions[0]
+            opponent_color = "BLACK" if color == "WHITE" else "WHITE"
+            for row in range(10):
+                for col in range(11):
+                    piece = self.board[row][col]
+                    if piece and piece.color == opponent_color:
+                        valid_moves = piece.get_valid_moves(self.board)
+                        if king_pos in valid_moves:
+                            return True
         return False
+
 def main():
     # Satranç tahtasını oluştur
     chess_board = CustomChessBoard()
