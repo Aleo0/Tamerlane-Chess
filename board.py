@@ -39,7 +39,7 @@ class Piece:
         ]
         for r, c in possible_moves:
             if 0 <= r <= 9 and 0 <= c <= 10:
-                if board[r][c] is None or board[r][c].color != self.color:
+                if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
                     moves.append((r, c))
         return moves
 
@@ -82,15 +82,41 @@ class Piece:
 
     def get_şah_moves(self, board):
         directions = [(dr, dc) for dr in range(-1, 2) for dc in range(-1, 2) if (dr, dc) != (0, 0)]
-        return self._get_moves_in_direction(board, directions, max_distance=1)
+        moves = []
+        for dr, dc in directions:
+            r, c = self.row + dr, self.col + dc
+            if 0 <= r <= 9 and 0 <= c <= 10:
+                if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
+                    moves.append((r, c))
+        return moves
 
     def get_vezir_moves(self, board):
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
-        return self._get_moves_in_direction(board, directions, max_distance=1)
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+        moves = []
+
+        for dr, dc in directions:
+            r, c = self.row + dr, self.col + dc
+            while 0 <= r <= 9 and 0 <= c <= 10:
+                if board[r][c] is None:
+                    moves.append((r, c))
+                else:
+                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):
+                        moves.append((r, c))
+                    break
+                r += dr
+                c += dc
+
+        return moves
 
     def get_general_moves(self, board):
         directions = [(1, 1), (-1, -1), (1, -1), (-1, 1)]
-        return self._get_moves_in_direction(board, directions, max_distance=1)
+        moves = []
+        for dr, dc in directions:
+            r, c = self.row + dr, self.col + dc
+            if 0 <= r <= 9 and 0 <= c <= 10:
+                if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
+                    moves.append((r, c))
+        return moves
 
     def get_zürafa_moves(self, board):
         moves = []
@@ -118,7 +144,7 @@ class Piece:
                             if distance >= 3:  # Zürafa hareketi 3 kare uzaklıktan başlar
                                 # Hareketin geçerli olması için aradaki tüm karelerin boş olması gerekir
                                 if all(board[r + orto_dr * i][c + orto_dc * i] is None for i in range(1, distance)):
-                                    if board[end_r][end_c] is None:
+                                    if board[end_r][end_c] is None or (board[end_r][end_c].color != self.color and not (board[end_r][end_c].name == "Piyon\n Piyonu" and (end_r == 0 or end_r == 9))):
                                         moves.append((end_r, end_c))
                                     elif board[end_r][end_c].color != self.color:
                                         moves.append((end_r, end_c))
@@ -142,10 +168,11 @@ class Piece:
                     if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
                         moves.append((r, c))
                 else:
-                    
                     if current_piece.color != self.color:
                         if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
-                            moves.append((r, c))
+                            # "Piyon Piyonu" taşını son sırada yemeyi engelle
+                            if not (current_piece.name == "Piyon\n Piyonu" and (r == 0 or r == 9)):
+                                moves.append((r, c))
                     break
                 r += dr
                 c += dc
@@ -159,7 +186,7 @@ class Piece:
             (self.row + 2, self.col - 1), (self.row + 2, self.col + 1)
         ]
         return [(r, c) for r, c in possible_moves if
-                0 <= r <= 9 and 0 <= c <= 10 and (board[r][c] is None or board[r][c].color != self.color)]
+                0 <= r <= 9 and 0 <= c <= 10 and (board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))))]
 
     def get_kale_moves(self, board):
         moves = []
@@ -172,7 +199,7 @@ class Piece:
                     moves.append((r, c))
                 else:
                     # Eğer bir taşa rastlanırsa, o yönde hareket sona eriyor
-                    if board[r][c].color != self.color:  # Rakip taş ise, alınabilir
+                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):  # Rakip taş ise, alınabilir
                         moves.append((r, c))
                     break  # Kendi taşımız veya rakip taş olsun, döngüyü kır
                 r += dr
@@ -185,12 +212,16 @@ class Piece:
         moves = []
 
         for dr, dc in directions:
-            r, c = self.row + dr * 2, self.col + dc * 2
-            if 0 <= r <= 9 and 0 <= c <= 10:
-                # Hedef kare boş veya rakip taş içeriyorsa geçerli bir harekettir
-                if board[r][c] is None or board[r][c].color != self.color:
+            r, c = self.row + dr, self.col + dc
+            while 0 <= r <= 9 and 0 <= c <= 10:
+                if board[r][c] is None:
                     moves.append((r, c))
-                # Aradaki taşın durumu önemli değil, üstünden atlayabilir
+                else:
+                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):
+                        moves.append((r, c))
+                    break
+                r += dr
+                c += dc
 
         return moves
 
@@ -206,7 +237,7 @@ class Piece:
 
         for end_r, end_c in possible_moves:
             if 0 <= end_r <= 9 and 0 <= end_c <= 10:
-                if board[end_r][end_c] is None or board[end_r][end_c].color != self.color:
+                if board[end_r][end_c] is None or (board[end_r][end_c].color != self.color and not (board[end_r][end_c].name == "Piyon\n Piyonu" and (end_r == 0 or end_r == 9))):
                     moves.append((end_r, end_c))
 
         return moves
@@ -229,9 +260,14 @@ class Piece:
         return moves
     
     def get_prens_moves(self, board):
-        # Şah hareketleri ile aynı
         directions = [(dr, dc) for dr in range(-1, 2) for dc in range(-1, 2) if (dr, dc) != (0, 0)]
-        return self._get_moves_in_direction(board, directions, max_distance=1)
+        moves = []
+        for dr, dc in directions:
+            r, c = self.row + dr, self.col + dc
+            if 0 <= r <= 9 and 0 <= c <= 10:
+                if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
+                    moves.append((r, c))
+        return moves
 
 
 
