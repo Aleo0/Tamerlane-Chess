@@ -18,6 +18,7 @@ LIGHT_BROWN = (238, 203, 162)
 DARK_BROWN = (166, 125, 92)
 GOLD = (255, 215, 0)
 GREEN = (0, 255, 0)  
+RED = (255, 0, 0)
 
 # Ekranı oluştur
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -30,6 +31,7 @@ class Piece:
         self.color = color
         self.row = row
         self.col = col
+        self.is_sleeping = False  # Piyon Piyonu uyku modunda mı?
 
     def get_savaş_motoru_moves(self, board):
         moves = []
@@ -79,6 +81,27 @@ class Piece:
                 c += dc
                 distance += 1
         return moves
+    
+    def get_kale_moves(self, board):
+        moves = []
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # Yatay ve dikey yönler
+
+        for dr, dc in directions:
+            r, c = self.row + dr, self.col + dc
+            while 0 <= r <= 9 and 0 <= c <= 10:
+                if board[r][c] is None:
+                    moves.append((r, c))
+                else:
+                    # Eğer bir taşa rastlanırsa, o yönde hareket sona eriyor
+                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):  # Rakip taş ise, alınabilir
+                        moves.append((r, c))
+                    break  # Kendi taşımız veya rakip taş olsun, döngüyü kır
+                r += dr
+                c += dc
+
+        return moves
+
+
 
     def get_şah_moves(self, board):
         directions = [(dr, dc) for dr in range(-1, 2) for dc in range(-1, 2) if (dr, dc) != (0, 0)]
@@ -96,16 +119,12 @@ class Piece:
 
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
-            while 0 <= r <= 9 and 0 <= c <= 10:
-                if board[r][c] is None:
-                    moves.append((r, c))
-                else:
-                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):
-                        moves.append((r, c))
-                    break
-                r += dr
-                c += dc
-
+            # Tahta sınırları içinde kalmalı
+            if 0 <= r <= 9 and 0 <= c <= 10:
+                target_piece = board[r][c]
+                # Hedef kare boş olmalı veya rakip bir taş içermeli (son sıradaki Piyon Piyonu hariç)
+                if target_piece is None or (target_piece.color != self.color and not (target_piece.name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
+                    moves.append((r, c))  # Sadece bir kare uzağı ekle
         return moves
 
     def get_general_moves(self, board):
@@ -184,46 +203,26 @@ class Piece:
             (self.row - 1, self.col - 2), (self.row - 1, self.col + 2),
             (self.row + 1, self.col - 2), (self.row + 1, self.col + 2),
             (self.row + 2, self.col - 1), (self.row + 2, self.col + 1)
-        ]
+            ]
         return [(r, c) for r, c in possible_moves if
                 0 <= r <= 9 and 0 <= c <= 10 and (board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))))]
-
-    def get_kale_moves(self, board):
-        moves = []
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]  # Yatay ve dikey yönler
-
-        for dr, dc in directions:
-            r, c = self.row + dr, self.col + dc
-            while 0 <= r <= 9 and 0 <= c <= 10:
-                if board[r][c] is None:
-                    moves.append((r, c))
-                else:
-                    # Eğer bir taşa rastlanırsa, o yönde hareket sona eriyor
-                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):  # Rakip taş ise, alınabilir
-                        moves.append((r, c))
-                    break  # Kendi taşımız veya rakip taş olsun, döngüyü kır
-                r += dr
-                c += dc
 
         return moves
 
     def get_fil_moves(self, board):
-        directions = [(1, 1), (-1, -1), (1, -1), (-1, 1)]
         moves = []
+        possible_moves = [
+            (self.row + 2, self.col + 2), (self.row + 2, self.col - 2),
+            (self.row - 2, self.col + 2), (self.row - 2, self.col - 2)
+        ]
 
-        for dr, dc in directions:
-            r, c = self.row + dr, self.col + dc
-            while 0 <= r <= 9 and 0 <= c <= 10:
-                if board[r][c] is None:
-                    moves.append((r, c))
-                else:
-                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):
-                        moves.append((r, c))
-                    break
-                r += dr
-                c += dc
-
+        for r, c in possible_moves:
+            if 0 <= r <= 9 and 0 <= c <= 10:
+                # Hedef kare boşsa veya rakip taşsa (ve Piyon Piyonu son sırada değilse) hareketi ekle
+                if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
+                     moves.append((r,c))
         return moves
+    
 
     def get_deve_moves(self, board):
         moves = []
@@ -298,6 +297,8 @@ class CustomChessBoard:
         self.turn = "WHITE"
         self.check = {"WHITE": False, "BLACK": False}  # Şah durumunu takip etmek için
         self.captured_pieces = {"WHITE": [], "BLACK": []}  # Ele geçirilen taşları saklamak için
+        self.pawn_pawn_placeable = {"WHITE": [], "BLACK": []}
+
     def create_pieces(self):
         # Siyah taşlar
         self.board[0][0] = Piece("Fil", "BLACK", 0, 0)
@@ -391,16 +392,20 @@ class CustomChessBoard:
 
                     # Şah durumunu kontrol et ve efekti çiz
                     if piece and (piece.name == "Şah" or piece.name == "Prens"):
-                        if self.check[piece.color]:  # Şah ya da Prens tehdit altında mı?
+                        if self.check[piece.color]:
                             pygame.draw.rect(screen, (255, 0, 0),
                                             ((col + 1) * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
-                # Seçili taşın geçerli hareketlerini göster
-                if self.selected_piece and (row, col) in self.selected_piece.get_valid_moves(self.board):
-                    pygame.draw.circle(screen, GREEN, ((col + 1.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
+
+                if self.selected_piece:
+                    if self.selected_piece.name == "Piyon\n Piyonu" and self.selected_piece.is_sleeping:
+                        if (row, col) in self.valid_pawn_pawn_placements:
+                            pygame.draw.circle(screen, GREEN, ((col + 1.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
+                    elif (row, col) in self.selected_piece.get_valid_moves(self.board):
+                            pygame.draw.circle(screen, GREEN, ((col + 1.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
 
         self.draw_palace(screen, 0, SQUARE_SIZE, DARK_BROWN)  # Sol saray
-        self.draw_palace(screen, 12 * SQUARE_SIZE, 8 * SQUARE_SIZE, LIGHT_BROWN)  # Sağ saray
+        self.draw_palace(screen, 12 * SQUARE_SIZE, 8* SQUARE_SIZE, LIGHT_BROWN)  #Sağ saray 
 
     def draw_palace(self, screen, x, y, base_color):
         pygame.draw.rect(screen, base_color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
@@ -411,37 +416,53 @@ class CustomChessBoard:
         col = pos[0] // SQUARE_SIZE - 1
         row = pos[1] // SQUARE_SIZE
 
-        if 0 <= row <= 9 and 0 <= col <= 10:  # Tahta sınırları kontrolü
+        if 0 <= row <= 9 and 0 <= col <= 10:
             clicked_piece = self.board[row][col]
 
-            if self.selected_piece:  # Bir taş zaten seçiliyse
-                if (row, col) in self.selected_piece.get_valid_moves(self.board) and self.selected_piece.color == self.turn:
+            if self.selected_piece:
+                # Uyuyan Piyon Piyonu yerleştirme
+                if self.selected_piece.name == "Piyon\n Piyonu" and self.selected_piece.is_sleeping:
+                    if (row, col) in self.valid_pawn_pawn_placements:
+                        if self.place_sleeping_pawn_pawn(self.selected_piece.row, self.selected_piece.col, row, col):
+                            self.selected_piece = None
+                            self.change_turn()
+                            self.update_check_status()
+                    else:  # Geçersiz bir yere tıklandıysa seçimi kaldır
+                        self.selected_piece = None
+                        self.valid_pawn_pawn_placements = []
+                # Normal taş hareketi
+                elif (row, col) in self.selected_piece.get_valid_moves(self.board) and self.selected_piece.color == self.turn:
                     original_piece = self.board[row][col]
                     original_row, original_col = self.selected_piece.row, self.selected_piece.col
-                
-                    # Hareketi geçici olarak yap
+
                     self.move_piece(original_row, original_col, row, col)
-                
+
                     # Şah çekme kontrolü
                     if self.is_check(self.turn):
-                        # Eğer şah çekiliyorsa hareketi geri al
-                        self.move_piece(row, col, original_row, original_col)
-                        if original_piece:
+                        self.move_piece(row, col, original_row, original_col) # Hareketi geri al
+                        if original_piece: #Alınan taşı geri koy.
                             self.board[row][col] = original_piece
                             original_piece.row = row
                             original_piece.col = col
-                        return
+                        return 
 
-                    # Hareket geçerli ise sırayı değiştir
-                    self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
-                    self.selected_piece = None  # Seçimi kaldır
+                    self.change_turn() # Sırayı değiştir
+                    self.update_check_status()  # Şah durumunu güncelle
+                    self.selected_piece = None #Seçimi kaldır
 
-                elif clicked_piece and clicked_piece.color == self.turn:  # Başka bir kendi taşına tıklandıysa
-                    self.selected_piece = clicked_piece  # Yeni taşı seç
-                else:  # Geçersiz bir kareye tıklandıysa
-                    self.selected_piece = None  # Seçimi kaldır
-            elif clicked_piece and clicked_piece.color == self.turn:  # Henüz bir taş seçili değilse ve kendi taşına tıklandıysa
-                self.selected_piece = clicked_piece  # Taşı seç
+                # Başka bir taş seçme
+                elif clicked_piece and clicked_piece.color == self.turn and clicked_piece != self.selected_piece:
+                    self.selected_piece = clicked_piece
+                    self.valid_pawn_pawn_placements = []
+
+            # Yeni bir taş seçme (Piyon Piyonu veya normal taş)    
+            elif clicked_piece and clicked_piece.color == self.turn:
+                if clicked_piece.name == "Piyon\n Piyonu" and clicked_piece.is_sleeping:
+                    self.selected_piece = clicked_piece
+                    self.highlight_pawn_pawn_placement_options(clicked_piece)
+                else:
+                    self.selected_piece = clicked_piece
+                    self.valid_pawn_pawn_placements = [] 
 
     def update_check_status(self):
         self.check["WHITE"] = self.is_check("WHITE")
@@ -461,9 +482,22 @@ class CustomChessBoard:
             piece.col = end_col
             self.board[start_row][start_col] = None
 
-            # Promosyon kontrolü
-        if piece.name == "Şah\n Piyonu" and (end_row == 0 or end_row == 9):
-            self.board[end_row][end_col] = Piece("Prens", piece.color, end_row, end_col)
+            # Promosyon kontrolü ve Piyon Piyonu özel kuralı
+            if piece.name == "Şah\n Piyonu" and (end_row == 0 or end_row == 9):
+                self.board[end_row][end_col] = Piece("Prens", piece.color, end_row, end_col)
+            
+            # Piyon Piyonu son sıraya ulaştıysa, yerleştirilebilir hale gelir
+            if piece.name == "Piyon\n Piyonu" and (end_row == 0 or end_row == 9):
+                self.pawn_pawn_placeable[piece.color].append((end_row, end_col))
+
+
+            # Piyon Piyonu son sıraya ulaşırsa uyku moduna geçir
+            if piece.name == "Piyon\n Piyonu" and (end_row == 0 or end_row == 9):
+                piece.is_sleeping = True
+
+            # Eğer taş Piyon Piyonu ise ve uyku modunda değilse (yani hareket ettiriliyorsa), listeden eski konumunu kaldır
+            if piece.name == "Piyon\n Piyonu" and not piece.is_sleeping and (start_row, start_col) in self.pawn_pawn_placeable[piece.color] :
+                self.pawn_pawn_placeable[piece.color].remove((start_row, start_col))
 
     def is_check(self, color):
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
@@ -489,6 +523,253 @@ class CustomChessBoard:
                         if king_pos in valid_moves:
                             return True
         return False
+    
+
+    def is_position_forking_or_trapping(self, row, col, color):
+        """
+        Check if the position forks or traps important pieces.
+        Returns True if the placement threatens multiple pieces, traps a piece, or threatens a high-value piece.
+        """
+        opponent_color = "BLACK" if color == "WHITE" else "WHITE"
+    
+        # Piyon Piyonunu yerleştirmeyi simüle et
+        original_board = [row[:] for row in self.board]
+        self.board[row][col] = Piece("Piyon\n Piyonu", color, row, col)
+    
+        
+        threatened_pieces = []
+        trapped_pieces = []
+    
+        # Her rakip taş için tehdit konrolü
+        for r in range(10):
+            for c in range(11):
+                piece = self.board[r][c]
+                if piece and piece.color == opponent_color:
+                    valid_moves = self.board[row][col].get_valid_moves(self.board)
+                    if (r, c) in valid_moves:
+                        threatened_pieces.append(piece)
+                    
+                        
+                        all_moves_blocked = True
+                        for move_r in range(10):
+                            for move_c in range(11):
+                                if piece.get_valid_moves(self.board):
+                                    all_moves_blocked = False
+                                    break
+                            if not all_moves_blocked:
+                                break
+                    
+                        if all_moves_blocked:
+                            trapped_pieces.append(piece)
+    
+        
+        self.board = original_board
+    
+        # Yerleştirme şu durumlarda geçerlidir:
+        # 1. İki taşı çatallayabileceği bir durumda veya
+        # 2. bir taş tamamen sıkışmış, kaçamaz durumdaysa
+        return len(threatened_pieces) > 1 or len(trapped_pieces) > 0
+    
+
+    def handle_pawn_pawn_placement(self, pos):
+        """
+        Son sıraya ulaştığında Piyon Piyon'un özel yerleşimini
+        """
+        col = pos[0] // SQUARE_SIZE - 1
+        row = pos[1] // SQUARE_SIZE
+
+        if 0 <= row <= 9 and 0 <= col <= 10:
+            if row in [0, 9]:  # Son satırlar
+                color = "WHITE" if row == 0 else "BLACK"
+                
+                # Bu renk için yerleştirilebilecek bir Piyon olup olmadığını kontrol
+                available_pawn_pawns = [p for p in self.pawn_pawn_placeable[color] if p[0] == row]
+                
+                if available_pawn_pawns:
+                    # Pozisyonun yerleştirme için geçerli olup olmadığını kontrol
+                    if self.is_position_forking_or_trapping(row, col, color):
+                        # Piyonu yerleştirilebilir listeden kaldır
+                        pawn_to_remove = available_pawn_pawns[0]
+                        self.pawn_pawn_placeable[color].remove(pawn_to_remove)
+                        
+                        # Piyon Piyonunu yerleştir
+                        self.board[row][col] = Piece("Piyon\n Piyonu", color, row, col)
+                        
+                        # Tur değiştir
+                        self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
+                        return True
+        return False
+
+
+    def place_sleeping_pawn_pawn(self, start_row, start_col, end_row, end_col):
+        """Uyuyan Piyon Piyonu'nu yerleştirir, Şah hariç diğer taşları ele geçirme özelliği eklendi."""
+        piece = self.board[start_row][start_col]
+
+        if not piece or piece.name != "Piyon\n Piyonu" or not piece.is_sleeping:
+            return False
+
+        if (end_row, end_col) in self.valid_pawn_pawn_placements:
+            # Hedef karede Şah yoksa, herhangi bir taşı ele geçirebilir
+            target_piece = self.board[end_row][end_col]
+            if target_piece and target_piece.name in ("Şah", "Prens"): # Şah ve Prens korumalı
+                return False
+            else: #Diğer taşlar alınabilir.
+                 if target_piece:  # Eğer hedef karede bir taş varsa
+                    self.captured_pieces[target_piece.color].append(target_piece) # Taşı ele geçir
+
+                 self.move_piece(start_row, start_col, end_row, end_col) #hareketi yap
+                 piece.is_sleeping = False
+                 if (piece.row, piece.col) in self.pawn_pawn_placeable[piece.color]:
+                    self.pawn_pawn_placeable[piece.color].remove((piece.row, piece.col))
+                 self.valid_pawn_pawn_placements = []
+                 return True
+
+        return False
+    
+
+    def is_safe(self, row, col, color):
+        """Belirtilen karenin belirtilen renk için güvenli olup olmadığını kontrol eder."""
+
+        # Simülasyon için geçici bir taş oluştur
+        temp_piece = Piece("Temp", color, row, col)  
+        original_piece = self.board[row][col]
+        self.board[row][col] = temp_piece
+
+        opponent_color = "BLACK" if color == "WHITE" else "WHITE"
+        is_safe = True  # Başlangıçta güvenli kabul et
+
+        for r in range(10):
+            for c in range(11):
+                enemy_piece = self.board[r][c]
+                if enemy_piece and enemy_piece.color == opponent_color:
+                    # Potansiyel olarak tehlikeli hamleleri kontrol et
+                    if (row, col) in enemy_piece.get_valid_moves(self.board):
+                        is_safe = False
+                        break  # Tehlike bulundu, döngüden 
+            if not is_safe:
+                break  # Tehlike bulundu, döngüden çık
+
+        # Simülasyonu geri al
+        self.board[row][col] = original_piece
+
+        return is_safe
+    
+
+    def can_place_pawn_pawn(self, row, col, color):
+        """Piyon Piyonu belirtilen konuma yerleştirilebilir mi kontrol eder."""
+       #Güvenlik kontrolüne gerek yok çünkü artık tehlikeli karelere yerleştirilebilir.
+
+        temp_piece = Piece("Piyon\n Piyonu", color, row, col)
+        original_piece = self.board[row][col]  # Eski taşı sakla
+        self.board[row][col] = temp_piece # Geçici taşı yerleştir
+        temp_piece.row = row
+        temp_piece.col = col
+
+        # Yerleştirme geçerli mi kontrol et
+        is_valid = self.check_unavoidable_attack(row, col, color) or self.check_double_fork(row, col, color)
+
+        # Geçici taşı kaldır ve eski taşı geri koy
+        self.board[row][col] = original_piece
+
+        return is_valid
+    
+
+
+    def check_unavoidable_attack(self, row, col, color):
+        """Kaçınılmaz saldırı var mı kontrol eder."""
+        opponent_color = "BLACK" if color == "WHITE" else "WHITE"
+        attacking_piece = self.board[row][col] # Saldıran taşı önce al
+
+        # Saldıran taş yoksa, kaçınılmaz saldırı da yok.
+        if attacking_piece is None:
+            return False
+
+        for r in range(10):
+            for c in range(11):
+                target_piece = self.board[r][c]
+                if target_piece and target_piece.color == opponent_color:
+                    
+                    if (r,c) in attacking_piece.get_valid_moves(self.board):
+                        can_escape = False
+                        original_row, original_col = target_piece.row, target_piece.col
+
+                        for next_r in range(10):
+                            for next_c in range(11):
+                                #Hedef taşın geçerli hamleleri varsa
+                                if (next_r, next_c) in target_piece.get_valid_moves(self.board):
+                                     #Simülasyon için gerekli değişkenler
+                                    original_piece = self.board[next_r][next_c]
+                                    can_escape = False
+
+                                    # Hareketi simüle et
+                                    self.move_piece(original_row, original_col, next_r, next_c)
+
+                                    # Saldırı hala kaçınılmaz mı?
+                                    if (next_r, next_c) not in attacking_piece.get_valid_moves(self.board):
+                                        can_escape = True
+                                        
+                                    # Taşı ve varsa alınan taşı eski yerine koy
+                                    self.board[original_row][original_col] = target_piece
+                                    target_piece.row = original_row
+                                    target_piece.col = original_col
+                                    self.board[next_r][next_c] = original_piece
+                                    if original_piece is not None:
+                                        original_piece.row = next_r
+                                        original_piece.col = next_c
+
+
+
+                                    if can_escape:
+                                        break # Kaçış yolu bulundu
+                            if can_escape:
+                                break # Kaçış yolu bulundu
+                        if not can_escape: # Hiçbir kaçış yolu bulunamadı
+                            return True # Saldırı kaçınılmaz
+        return False
+    
+
+
+    def check_double_fork(self, row, col, color):
+        """Çatallama var mı kontrol eder."""
+
+        attacking_piece = self.board[row][col]
+
+        # Eğer attacking_piece None ise, çatal olamaz
+        if attacking_piece is None:  
+            return False
+
+        opponent_color = "BLACK" if color == "WHITE" else "WHITE"
+        forked_pieces = []
+
+        
+        valid_moves = attacking_piece.get_valid_moves(self.board)
+
+        for r in range(10):
+            for c in range(11):
+                target_piece = self.board[r][c] #Hedeflenen taşı al
+                #Hedef taşın geçerli hamleler arasında olup olmadığını ve Şah olmadığını kontrol et
+                if (r, c) in valid_moves and target_piece is not None and target_piece.color == opponent_color and target_piece.name != "Şah":
+                    # Aynı taşın birden fazla kez eklenmesini engelle
+                    if target_piece not in forked_pieces:
+                        forked_pieces.append(target_piece)
+
+        return len(forked_pieces) >= 2 # En az iki farklı taşın tehdit altında olması gerekiyor
+    
+
+
+    def highlight_pawn_pawn_placement_options(self, piece):
+        if piece.name == "Piyon\n Piyonu" and piece.is_sleeping:
+            self.valid_pawn_pawn_placements = []
+            for row in range(1, 9):  
+                for col in range(11):
+                    target_piece = self.board[row][col] #Hedef karedeki taşı al
+
+                    # Şah veya Prens değilse ve güvenliyse ekle.
+                    if not (target_piece and target_piece.name in ("Şah", "Prens")) and self.is_safe(row, col, piece.color):  
+                        if self.can_place_pawn_pawn(row, col, piece.color):
+                           self.valid_pawn_pawn_placements.append((row, col))
+
+
 
 def main():
     # Satranç tahtasını oluştur
