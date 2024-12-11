@@ -32,6 +32,7 @@ class Piece:
         self.row = row
         self.col = col
         self.is_sleeping = False  # Piyon Piyonu uyku modunda mı?
+        
 
     def get_savaş_motoru_moves(self, board):
         moves = []
@@ -298,6 +299,11 @@ class CustomChessBoard:
         self.check = {"WHITE": False, "BLACK": False}  # Şah durumunu takip etmek için
         self.captured_pieces = {"WHITE": [], "BLACK": []}  # Ele geçirilen taşları saklamak için
         self.pawn_pawn_placeable = {"WHITE": [], "BLACK": []}
+        self.pawn_pawn_move_count = {"WHITE": 0, "BLACK": 0}  # Piyon Piyonu hareket sayacı
+        self.initial_pawn_pawn_positions = { #Başlangıç pozisyonlarını kaydet
+            "WHITE": (7, 5),
+            "BLACK": (2, 5),
+        }
 
     def create_pieces(self):
         # Siyah taşlar
@@ -477,26 +483,43 @@ class CustomChessBoard:
             captured_piece = self.board[end_row][end_col]
             if captured_piece:
                 self.captured_pieces[captured_piece.color].append(captured_piece)
+
             self.board[end_row][end_col] = piece
             piece.row = end_row
             piece.col = end_col
             self.board[start_row][start_col] = None
 
-            # Promosyon kontrolü ve Piyon Piyonu özel kuralı
+            # Promosyon kontrolü (Şah Piyonu için Prens'e terfi)
             if piece.name == "Şah\n Piyonu" and (end_row == 0 or end_row == 9):
                 self.board[end_row][end_col] = Piece("Prens", piece.color, end_row, end_col)
-            
-            # Piyon Piyonu son sıraya ulaştıysa, yerleştirilebilir hale gelir
-            if piece.name == "Piyon\n Piyonu" and (end_row == 0 or end_row == 9):
-                self.pawn_pawn_placeable[piece.color].append((end_row, end_col))
 
 
-            # Piyon Piyonu son sıraya ulaşırsa uyku moduna geçir
-            if piece.name == "Piyon\n Piyonu" and (end_row == 0 or end_row == 9):
-                piece.is_sleeping = True
+            # Piyon Piyonu hareket sayacı ve özel kural
+            if piece.name == "Piyon\n Piyonu":
+                if end_row == 0 or end_row == 9:
+                    self.pawn_pawn_move_count[piece.color] += 1  # Hareket sayacını artır
+
+                    if self.pawn_pawn_move_count[piece.color] == 1:
+                        piece.is_sleeping = True  # İlk ulaşmada uyku moduna al
+
+                    elif self.pawn_pawn_move_count[piece.color] == 2:
+                        initial_row, initial_col = self.initial_pawn_pawn_positions[piece.color]
+
+                        # Hedef karedeki taşı ele geçir (Şah hariç)
+                        target_piece = self.board[initial_row][initial_col]
+                        if target_piece and target_piece.name not in ("Şah", "Prens"):
+                            self.captured_pieces[target_piece.color].append(target_piece)
+                            self.board[initial_row][initial_col] = None
+
+                        # Piyon Piyonu'nu başlangıç konumuna taşı
+                        self.board[end_row][end_col] = None  # Eski konumdan kaldır
+                        self.board[initial_row][initial_col] = piece  # Başlangıç noktasına koy                    
+                        piece.row = initial_row
+                        piece.col = initial_col
+                        piece.is_sleeping = False # Uyku modundan çıkar. Normal hareketine devam etsin.
 
             # Eğer taş Piyon Piyonu ise ve uyku modunda değilse (yani hareket ettiriliyorsa), listeden eski konumunu kaldır
-            if piece.name == "Piyon\n Piyonu" and not piece.is_sleeping and (start_row, start_col) in self.pawn_pawn_placeable[piece.color] :
+            if piece.name == "Piyon\n Piyonu" and not piece.is_sleeping and (start_row, start_col) in self.pawn_pawn_placeable[piece.color]:
                 self.pawn_pawn_placeable[piece.color].remove((start_row, start_col))
 
     def is_check(self, color):
