@@ -32,6 +32,7 @@ class Piece:
         self.row = row
         self.col = col
         self.is_sleeping = False  # Piyon Piyonu uyku modunda mı?
+        self.pawn_pawn_journey_count = 0  # Piyon Piyonu'nun son sıraya kaç kez ulaştığı
         
 
     def get_savaş_motoru_moves(self, board):
@@ -47,7 +48,7 @@ class Piece:
         return moves
 
     def get_valid_moves(self, board):
-        if self.name == "Prens":
+        if self.name == "Prens" or self.name == "Maceracı Şah":
             return self.get_prens_moves(board)
 
         # Taşın None olup olmadığını kontrol et
@@ -498,7 +499,7 @@ class CustomChessBoard:
             if piece.name == "Piyon\n Piyonu":
                 if end_row == 0 or end_row == 9:
                     self.pawn_pawn_move_count[piece.color] += 1  # Hareket sayacını artır
-
+                    piece.pawn_pawn_journey_count += 1 #Yolculuk sayacını arttır
                     if self.pawn_pawn_move_count[piece.color] == 1:
                         piece.is_sleeping = True  # İlk ulaşmada uyku moduna al
 
@@ -518,6 +519,11 @@ class CustomChessBoard:
                         piece.col = initial_col
                         piece.is_sleeping = False # Uyku modundan çıkar. Normal hareketine devam etsin.
 
+
+                    elif self.pawn_pawn_move_count[piece.color] == 3: # 3. kez son sıraya ulaştığında
+                        self.board[end_row][end_col] = None
+                        self.board[end_row][end_col] = Piece("Maceracı Şah", piece.color, end_row, end_col)
+                        
             # Eğer taş Piyon Piyonu ise ve uyku modunda değilse (yani hareket ettiriliyorsa), listeden eski konumunu kaldır
             if piece.name == "Piyon\n Piyonu" and not piece.is_sleeping and (start_row, start_col) in self.pawn_pawn_placeable[piece.color]:
                 self.pawn_pawn_placeable[piece.color].remove((start_row, start_col))
