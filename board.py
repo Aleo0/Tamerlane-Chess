@@ -5,12 +5,12 @@ import sys
 pygame.init()
 
 # Kare boyutu
-SQUARE_SIZE = 60
+SQUARE_SIZE = 70
 
 # Ekran boyutları
 WIDTH = 13 * SQUARE_SIZE  # 11 normal kare + 1 ek kare (SOLDA) + 1 ek kare (SAĞDA)
 HEIGHT = 10 * SQUARE_SIZE
-
+    
 # Renkler
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
@@ -42,16 +42,27 @@ class Piece:
             (self.row, self.col + 2), (self.row, self.col - 2)
         ]
         for r, c in possible_moves:
-            if 0 <= r <= 9 and 0 <= c <= 10:
+            if 0 <= r <= 9 and 0 <= c <= 12:
                 if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
                     moves.append((r, c))
         return moves
 
     def get_valid_moves(self, board):
+        # Prens ve Maceracı Şah için de engellenmiş kare kontrolü ekleyelim
         if self.name == "Prens" or self.name == "Maceracı Şah":
-            return self.get_prens_moves(board)
+            moves = self.get_prens_moves(board)
+        
+            # Engellenmiş karelerden temizle
+            valid_moves = [
+                (r, c) for r, c in moves 
+                if (c, r) not in [
+                    (12, 0), (12,1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
+                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0,8), (0, 9)          # A sütunu engelleri
+                ]      
+            ]
+            return valid_moves
 
-        # Taşın None olup olmadığını kontrol et
+        # Diğer taşlar için mevcut kontrol
         if self is None or self.name is None:
             return []
 
@@ -62,22 +73,38 @@ class Piece:
             move_func = getattr(self, f"get_{self.name.lower().replace(' ', '_')}_moves", None)
 
         if move_func:
-            return move_func(board)
-        return []
+            all_moves = move_func(board) 
 
+            valid_moves = [
+                (r, c) for r, c in all_moves 
+                if (c, r) not in [
+                    (12, 0), (12,1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
+                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0,8), (0, 9)          # A sütunu engelleri
+                ]
+            ]
+
+            return valid_moves
+        return []
+    
+    
     def _get_moves_in_direction(self, board, directions, max_distance=None):
         moves = []
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
             distance = 1
-            while 0 <= r <= 9 and 0 <= c <= 10:
+            while 0 <= r < 10 and 0 <= c < 13:
                 if max_distance and distance > max_distance:
                     break
                 piece = board[r][c]
                 if piece is None:
-                    moves.append((r, c))
+                    if (c, r) not in [(12, 0), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
+                                        (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]:         # A sütunu engelleri
+                        moves.append((r, c))
+                    else:
+                        break  # Engellenmiş kareye rastlandı, dur
                 elif piece.color != self.color:
                     moves.append((r, c))  # Rakip taş olsa bile hareketi ekle
+                    break  # Engelle karşılaşıldığında dur
                 # Aynı renkteki taşlar hala engelliyor
                 r += dr
                 c += dc
@@ -90,18 +117,22 @@ class Piece:
 
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
-            while 0 <= r <= 9 and 0 <= c <= 10:
+            while 0 <= r < 10 and 0 <= c < 13:
+                if (c, r) in [(12, 0), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
+                              (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]:         # A sütunu engelleri
+                    break  # Engellenmiş kareye ulaşıldığında dur
                 if board[r][c] is None:
                     moves.append((r, c))
                 else:
                     # Eğer bir taşa rastlanırsa, o yönde hareket sona eriyor
-                    if board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9)):  # Rakip taş ise, alınabilir
-                        moves.append((r, c))
-                    break  # Kendi taşımız veya rakip taş olsun, döngüyü kır
+                    if board[r][c].color != self.color:
+                        moves.append((r, c))  # Rakip taş ise, alınabilir
+                    break  # Hareketi durdur
                 r += dr
                 c += dc
 
         return moves
+
 
 
 
@@ -110,19 +141,19 @@ class Piece:
         moves = []
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
-            if 0 <= r <= 9 and 0 <= c <= 10:
+            if 0 <= r < 10 and 0 <= c < 13:
                 if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
                     moves.append((r, c))
         return moves
 
     def get_vezir_moves(self, board):
-        directions = [(0, 1), (0, -1), (1, 0), (-1, 0), (1, 1), (-1, -1), (1, -1), (-1, 1)]
+        directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
         moves = []
 
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
             # Tahta sınırları içinde kalmalı
-            if 0 <= r <= 9 and 0 <= c <= 10:
+            if 0 <= r <= 9 and 0 <= c <= 12:
                 target_piece = board[r][c]
                 # Hedef kare boş olmalı veya rakip bir taş içermeli (son sıradaki Piyon Piyonu hariç)
                 if target_piece is None or (target_piece.color != self.color and not (target_piece.name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
@@ -134,7 +165,7 @@ class Piece:
         moves = []
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
-            if 0 <= r <= 9 and 0 <= c <= 10:
+            if 0 <= r <= 9 and 0 <= c <= 12:
                 if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
                     moves.append((r, c))
         return moves
@@ -183,7 +214,7 @@ class Piece:
         moves = []
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
-            while 0 <= r <= 9 and 0 <= c <= 10:
+            while 0 <= r <= 9 and 0 <= c <= 12:
                 current_piece = board[r][c]
                 if current_piece is None:
                     if abs(r - self.row) >= 2 and abs(c - self.col) >= 2:
@@ -207,7 +238,7 @@ class Piece:
             (self.row + 2, self.col - 1), (self.row + 2, self.col + 1)
             ]
         return [(r, c) for r, c in possible_moves if
-                0 <= r <= 9 and 0 <= c <= 10 and (board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))))]
+                0 <= r <= 9 and 0 <= c <= 12 and (board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))))]
 
         return moves
 
@@ -219,7 +250,7 @@ class Piece:
         ]
 
         for r, c in possible_moves:
-            if 0 <= r <= 9 and 0 <= c <= 10:
+            if 0 <= r <= 9 and 0 <= c <= 12:
                 # Hedef kare boşsa veya rakip taşsa (ve Piyon Piyonu son sırada değilse) hareketi ekle
                 if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
                      moves.append((r,c))
@@ -237,7 +268,7 @@ class Piece:
         ]
 
         for end_r, end_c in possible_moves:
-            if 0 <= end_r <= 9 and 0 <= end_c <= 10:
+            if 0 <= end_r <= 9 and 0 <= end_c <= 12:
                 if board[end_r][end_c] is None or (board[end_r][end_c].color != self.color and not (board[end_r][end_c].name == "Piyon\n Piyonu" and (end_r == 0 or end_r == 9))):
                     moves.append((end_r, end_c))
 
@@ -255,7 +286,7 @@ class Piece:
         # Çapraz yeme
         for dc in [-1, 1]:
             r, c = self.row + direction, self.col + dc
-            if 0 <= r <= 9 and 0 <= c <= 10 and board[r][c] is not None and board[r][c].color != self.color:
+            if 0 <= r <= 9 and 0 <= c <= 12 and board[r][c] is not None and board[r][c].color != self.color:
                 moves.append((r, c))
 
         return moves
@@ -265,7 +296,7 @@ class Piece:
         moves = []
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
-            if 0 <= r <= 9 and 0 <= c <= 10:
+            if 0 <= r <= 9 and 0 <= c <= 12:
                 if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
                     moves.append((r, c))
         return moves
@@ -293,7 +324,7 @@ class Piece:
 
 class CustomChessBoard:
     def __init__(self):
-        self.board = [[None for _ in range(11)] for _ in range(10)]
+        self.board = [[None for _ in range(13)] for _ in range(10)]
         self.selected_piece = None
         self.create_pieces()
         self.turn = "WHITE"
@@ -302,90 +333,112 @@ class CustomChessBoard:
         self.pawn_pawn_placeable = {"WHITE": [], "BLACK": []}
         self.pawn_pawn_move_count = {"WHITE": 0, "BLACK": 0}  # Piyon Piyonu hareket sayacı
         self.initial_pawn_pawn_positions = { #Başlangıç pozisyonlarını kaydet
-            "WHITE": (7, 5),
-            "BLACK": (2, 5),
+            "WHITE": (7, 6),
+            "BLACK": (2, 6),
         }
 
     def create_pieces(self):
-        # Siyah taşlar
-        self.board[0][0] = Piece("Fil", "BLACK", 0, 0)
-        self.board[0][2] = Piece("Deve", "BLACK", 0, 2)
-        self.board[0][8] = Piece("Deve", "BLACK", 0, 8)
-        self.board[0][10] = Piece("Fil", "BLACK", 0, 10)
-        self.board[1][0] = Piece("Kale", "BLACK", 1, 0)
-        self.board[1][1] = Piece("At", "BLACK", 1, 1)
-        self.board[1][2] = Piece("Gözcü", "BLACK", 1, 2)
-        self.board[1][3] = Piece("Zürafa", "BLACK", 1, 3)
-        self.board[1][4] = Piece("Vezir", "BLACK", 1, 4)
-        self.board[1][5] = Piece("Şah", "BLACK", 1, 5)
-        self.board[1][6] = Piece("General", "BLACK", 1, 6)
-        self.board[1][7] = Piece("Zürafa", "BLACK", 1, 7)
-        self.board[1][8] = Piece("Gözcü", "BLACK", 1, 8)
-        self.board[1][9] = Piece("At", "BLACK", 1, 9)
-        self.board[1][10] = Piece("Kale", "BLACK", 1, 10)
+        # Siyah taşlar (Güncellendi)
+        self.board[0][1] = Piece("Fil", "BLACK", 0, 1)
+        self.board[0][3] = Piece("Deve", "BLACK", 0, 3)
+        self.board[0][9] = Piece("Deve", "BLACK", 0, 9)
+        self.board[0][11] = Piece("Fil", "BLACK", 0, 11)
+        self.board[1][1] = Piece("Kale", "BLACK", 1, 1)
+        self.board[1][2] = Piece("At", "BLACK", 1, 2)
+        self.board[1][3] = Piece("Gözcü", "BLACK", 1, 3)
+        self.board[1][4] = Piece("Zürafa", "BLACK", 1, 4)
+        self.board[1][5] = Piece("Vezir", "BLACK", 1, 5)
+        self.board[1][6] = Piece("Şah", "BLACK", 1, 6)
+        self.board[1][7] = Piece("General", "BLACK", 1, 7)
+        self.board[1][8] = Piece("Zürafa", "BLACK", 1, 8)
+        self.board[1][9] = Piece("Gözcü", "BLACK", 1, 9)
+        self.board[1][10] = Piece("At", "BLACK", 1, 10)
+        self.board[1][11] = Piece("Kale", "BLACK", 1, 11)
 
-        # Siyah piyonlar
-        self.board[2][0] = Piece("Piyon\n Piyonu", "BLACK", 2, 0)
-        self.board[2][1] = Piece("Savaş Motoru\n Piyonu", "BLACK", 2, 1)
-        self.board[2][2] = Piece("deve\n Piyonu", "BLACK", 2, 2)
-        self.board[2][3] = Piece("Fil\n Piyonu", "BLACK", 2, 3)
-        self.board[2][4] = Piece("General\n Piyonu", "BLACK", 2, 4)
-        self.board[2][5] = Piece("Şah\n Piyonu", "BLACK", 2, 5)
-        self.board[2][6] = Piece("Vezir\n Piyonu", "BLACK", 2, 6)
-        self.board[2][7] = Piece("Zürafa\n Piyonu", "BLACK", 2, 7)
-        self.board[2][8] = Piece("Gözcü\n Piyonu", "BLACK", 2, 8)
-        self.board[2][9] = Piece("At\n Piyonu", "BLACK", 2, 9)
-        self.board[2][10] = Piece("Kale\n Piyonu", "BLACK", 2, 10)
+        # Siyah piyonlar (Güncellendi)
+        self.board[2][1] = Piece("Piyon\n Piyonu", "BLACK", 2, 1)
+        self.board[2][2] = Piece("Savaş Motoru\n Piyonu", "BLACK", 2, 2)
+        self.board[2][3] = Piece("Deve\n Piyonu", "BLACK", 2, 3)
+        self.board[2][4] = Piece("Fil\n Piyonu", "BLACK", 2, 4)
+        self.board[2][5] = Piece("General\n Piyonu", "BLACK", 2, 5)
+        self.board[2][6] = Piece("Şah\n Piyonu", "BLACK", 2, 6)
+        self.board[2][7] = Piece("Vezir\n Piyonu", "BLACK", 2, 7)
+        self.board[2][8] = Piece("Zürafa\n Piyonu", "BLACK", 2, 8)
+        self.board[2][9] = Piece("Gözcü\n Piyonu", "BLACK", 2, 9)
+        self.board[2][10] = Piece("At\n Piyonu", "BLACK", 2, 10)
+        self.board[2][11] = Piece("Kale\n Piyonu", "BLACK", 2, 11)
 
-        # Beyaz taşlar
-        self.board[9][0] = Piece("Fil", "WHITE", 9, 0)
-        self.board[9][2] = Piece("Deve", "WHITE", 9, 2)
-        self.board[9][8] = Piece("Deve", "WHITE", 9, 8)
-        self.board[9][10] = Piece("Fil", "WHITE", 9, 10)
-        self.board[8][0] = Piece("Kale", "WHITE", 8, 0)
-        self.board[8][1] = Piece("At", "WHITE", 8, 1)
-        self.board[8][2] = Piece("Gözcü", "WHITE", 8, 2)
-        self.board[8][3] = Piece("Zürafa", "WHITE", 8, 3)
-        self.board[8][4] = Piece("General", "WHITE", 8, 4)
-        self.board[8][5] = Piece("Şah", "WHITE", 8, 5)
-        self.board[8][6] = Piece("Vezir", "WHITE", 8, 6)
-        self.board[8][7] = Piece("Zürafa", "WHITE", 8, 7)
-        self.board[8][8] = Piece("Gözcü", "WHITE", 8, 8)
-        self.board[8][9] = Piece("At", "WHITE", 8, 9)
-        self.board[8][10] = Piece("Kale", "WHITE", 8, 10)
+        # Beyaz taşlar (Güncellendi)
+        self.board[9][1] = Piece("Fil", "WHITE", 9, 1)
+        self.board[9][3] = Piece("Deve", "WHITE", 9, 3)
+        self.board[9][9] = Piece("Deve", "WHITE", 9, 9)
+        self.board[9][11] = Piece("Fil", "WHITE", 9, 11)
+        self.board[8][1] = Piece("Kale", "WHITE", 8, 1)
+        self.board[8][2] = Piece("At", "WHITE", 8, 2)
+        self.board[8][3] = Piece("Gözcü", "WHITE", 8, 3)
+        self.board[8][4] = Piece("Zürafa", "WHITE", 8, 4)
+        self.board[8][5] = Piece("General", "WHITE", 8, 5)
+        self.board[8][6] = Piece("Şah", "WHITE", 8, 6)
+        self.board[8][7] = Piece("Vezir", "WHITE", 8, 7)
+        self.board[8][8] = Piece("Zürafa", "WHITE", 8, 8)
+        self.board[8][9] = Piece("Gözcü", "WHITE", 8, 9)
+        self.board[8][10] = Piece("At", "WHITE", 8, 10)
+        self.board[8][11] = Piece("Kale", "WHITE", 8, 11)
 
-        # Beyaz piyonlar 
-        self.board[7][0] = Piece("Piyon\n Piyonu", "WHITE", 7, 0)
-        self.board[7][1] = Piece("Savaş Motoru\n Piyonu", "WHITE", 7, 1)
-        self.board[7][2] = Piece("Deve\n Piyonu", "WHITE", 7, 2)
-        self.board[7][3] = Piece("Fil\n Piyonu", "WHITE", 7, 3)
-        self.board[7][4] = Piece("General\n Piyonu", "WHITE", 7, 4)
-        self.board[7][5] = Piece("Şah\n Piyonu", "WHITE", 7, 5)
-        self.board[7][6] = Piece("Vezir\n Piyonu", "WHITE", 7, 6)
-        self.board[7][7] = Piece("Zürafa\n Piyonu", "WHITE", 7, 7)
-        self.board[7][8] = Piece("Gözcü\n Piyonu", "WHITE", 7, 8)
-        self.board[7][9] = Piece("At\n Piyonu", "WHITE", 7, 9)
-        self.board[7][10] = Piece("Kale\n Piyonu", "WHITE", 7, 10)
+        # Beyaz piyonlar (Güncellendi)
+        self.board[7][1] = Piece("Piyon\n Piyonu", "WHITE", 7, 1)
+        self.board[7][2] = Piece("Savaş Motoru\n Piyonu", "WHITE", 7, 2)
+        self.board[7][3] = Piece("Deve\n Piyonu", "WHITE", 7, 3)
+        self.board[7][4] = Piece("Fil\n Piyonu", "WHITE", 7, 4)
+        self.board[7][5] = Piece("General\n Piyonu", "WHITE", 7, 5)
+        self.board[7][6] = Piece("Şah\n Piyonu", "WHITE", 7, 6)
+        self.board[7][7] = Piece("Vezir\n Piyonu", "WHITE", 7, 7)
+        self.board[7][8] = Piece("Zürafa\n Piyonu", "WHITE", 7, 8)
+        self.board[7][9] = Piece("Gözcü\n Piyonu", "WHITE", 7, 9)
+        self.board[7][10] = Piece("At\n Piyonu", "WHITE", 7, 10)
+        self.board[7][11] = Piece("Kale\n Piyonu", "WHITE", 7, 11)
 
-        # Savaş Motorları
-        self.board[0][4] = Piece("Savaş Motoru", "BLACK", 0, 4)  # E1
-        self.board[0][6] = Piece("Savaş Motoru", "BLACK", 0, 6)  # G1
-        self.board[9][4] = Piece("Savaş Motoru", "WHITE", 9, 4)  # E10
-        self.board[9][6] = Piece("Savaş Motoru", "WHITE", 9, 6)  # G10
+        # Savaş Motorları (Güncellendi)
+        self.board[0][5] = Piece("Savaş Motoru", "BLACK", 0, 5)  # E1
+        self.board[0][7] = Piece("Savaş Motoru", "BLACK", 0, 7)  # G1
+        self.board[9][5] = Piece("Savaş Motoru", "WHITE", 9, 5)  # E10
+        self.board[9][7] = Piece("Savaş Motoru", "WHITE", 9, 7)  # G10
 
 
     def draw(self, screen):
+        # Engellenmiş kareler
+        blocked_squares = [
+            (12, 0), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),(12, 1),  # M sütunu engelleri
+            (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9),(0, 8)          # A sütunu engelleri
+        ]
+        
         for row in range(10):
-            for col in range(11):
-                color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
-                pygame.draw.rect(screen, color, ((col + 1) * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+            for col in range(13):
+                # Kare rengi belirle
+                if (col, row) in blocked_squares:
+                    color = BLACK  # Engellenmiş kareleri siyaha boya
+                else:
+                    color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN  # Diğer kareleri normal renklendir
 
-                # Koordinatları yazdır
+                # Kareyi çiz
+                pygame.draw.rect(screen, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+
+                # Kare üzerine koordinat yazdır
                 font = pygame.font.Font(None, 20)
-                text = font.render(chr(ord('A') + col) + str(10 - row), True, BLACK)
-                text_rect = text.get_rect(bottomright=((col + 2) * SQUARE_SIZE, (row + 1) * SQUARE_SIZE))
-                screen.blit(text, text_rect)
+                if col > 0:
+                    text = font.render(chr(ord('A') + col - 1) + str(10 - row), True, BLACK)
+                    text_rect = text.get_rect(bottomright=(col * SQUARE_SIZE, (row + 1) * SQUARE_SIZE))
+                    screen.blit(text, text_rect)
+                if col == 12:
+                    text = font.render("M" + str(10 - row), True, BLACK)
+                    text_rect = text.get_rect(bottomright=((col + 1) * SQUARE_SIZE, (row + 1) * SQUARE_SIZE))
+                    screen.blit(text, text_rect)
+                
+                # Özel efekt çerçevesi ekle (M2 ve A9)
+                if (col, row) == (12, 8) or (col, row) == (0, 1):
+                    pygame.draw.rect(screen, GOLD, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
+                # Taşı çiz
                 piece = self.board[row][col]
                 if piece:
                     piece_color = BLACK if piece.color == "BLACK" else WHITE
@@ -394,36 +447,27 @@ class CustomChessBoard:
                     for i, line in enumerate(lines):
                         piece_text = piece_font.render(line, True, piece_color)
                         piece_text_rect = piece_text.get_rect(
-                            center=((col + 1.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE + i * 12))
+                            center=((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE + i * 12))
                         screen.blit(piece_text, piece_text_rect)
 
                     # Şah durumunu kontrol et ve efekti çiz
                     if piece and (piece.name == "Şah" or piece.name == "Prens"):
                         if self.check[piece.color]:
                             pygame.draw.rect(screen, (255, 0, 0),
-                                            ((col + 1) * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
-
+                                        (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
                 if self.selected_piece:
                     if self.selected_piece.name == "Piyon\n Piyonu" and self.selected_piece.is_sleeping:
                         if (row, col) in self.valid_pawn_pawn_placements:
-                            pygame.draw.circle(screen, GREEN, ((col + 1.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
+                            pygame.draw.circle(screen, GREEN, ((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
                     elif (row, col) in self.selected_piece.get_valid_moves(self.board):
-                            pygame.draw.circle(screen, GREEN, ((col + 1.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
-
-        self.draw_palace(screen, 0, SQUARE_SIZE, DARK_BROWN)  # Sol saray
-        self.draw_palace(screen, 12 * SQUARE_SIZE, 8* SQUARE_SIZE, LIGHT_BROWN)  #Sağ saray 
-
-    def draw_palace(self, screen, x, y, base_color):
-        pygame.draw.rect(screen, base_color, (x, y, SQUARE_SIZE, SQUARE_SIZE))
-        pygame.draw.rect(screen, GOLD, (x - 2, y - 2, SQUARE_SIZE + 4, SQUARE_SIZE + 4), 2)
-        pygame.draw.rect(screen, GOLD, (x - 4, y - 4, SQUARE_SIZE + 8, SQUARE_SIZE + 8), 2)
+                            pygame.draw.circle(screen, GREEN, ((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
 
     def handle_click(self, pos):
-        col = pos[0] // SQUARE_SIZE - 1
+        col = pos[0] // SQUARE_SIZE 
         row = pos[1] // SQUARE_SIZE
 
-        if 0 <= row <= 9 and 0 <= col <= 10:
+        if 0 <= row < 10 and 0 <= col < 13:
             clicked_piece = self.board[row][col]
 
             if self.selected_piece:
@@ -532,7 +576,7 @@ class CustomChessBoard:
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
         kings_positions = []  # Şah ve Prens pozisyonlarını takip edeceğiz
         for row in range(10):
-            for col in range(11):
+            for col in range(13):
                 piece = self.board[row][col]
                 if piece and piece.color == color and (piece.name == "Şah" or piece.name == "Prens"):
                     kings_positions.append((row, col))
@@ -790,7 +834,7 @@ class CustomChessBoard:
         if piece.name == "Piyon\n Piyonu" and piece.is_sleeping:
             self.valid_pawn_pawn_placements = []
             for row in range(1, 9):  
-                for col in range(11):
+                for col in range(13):
                     target_piece = self.board[row][col] #Hedef karedeki taşı al
 
                     # Şah veya Prens değilse ve güvenliyse ekle.
@@ -815,7 +859,7 @@ def main():
                 chess_board.update_check_status()  # Her tıklamadan sonra şah durumunu güncelle
 
         screen.fill(WHITE)
-        pygame.draw.rect(screen, LIGHT_BROWN, (0, SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
+        pygame.draw.rect(screen, LIGHT_BROWN, (0, 0, WIDTH, HEIGHT))
         chess_board.draw(screen)
         pygame.display.flip()
 
