@@ -48,21 +48,6 @@ class Piece:
         return moves
 
     def get_valid_moves(self, board):
-        # Prens ve Maceracı Şah için de engellenmiş kare kontrolü ekleyelim
-        if self.name == "Prens" or self.name == "Maceracı Şah":
-            moves = self.get_prens_moves(board)
-        
-            # Engellenmiş karelerden temizle
-            valid_moves = [
-                (r, c) for r, c in moves 
-                if (c, r) not in [
-                    (12, 0), (12,1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
-                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0,8), (0, 9)          # A sütunu engelleri
-                ]      
-            ]
-            return valid_moves
-
-        # Diğer taşlar için mevcut kontrol
         if self is None or self.name is None:
             return []
 
@@ -73,18 +58,28 @@ class Piece:
             move_func = getattr(self, f"get_{self.name.lower().replace(' ', '_')}_moves", None)
 
         if move_func:
-            all_moves = move_func(board) 
-
-            valid_moves = [
-                (r, c) for r, c in all_moves 
-                if (c, r) not in [
-                    (12, 0), (12,1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
-                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0,8), (0, 9)          # A sütunu engelleri
+            all_moves = move_func(board)
+        
+            # Şahlar için özel kontrol
+            if self.name == "Şah":
+                valid_moves = [
+                    (r, c) for r, c in all_moves
+                    if (c, r) not in [(12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
+                                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]
+                    or (c, r) in [(0, 1)] and self.color == "WHITE"  # A9 beyaz şah için açık
+                    or (c, r) in [(12, 8)] and self.color == "BLACK"  # M2 siyah şah için açık
                 ]
-            ]
+            else:
+                valid_moves = [
+                    (r, c) for r, c in all_moves
+                    if (c, r) not in [
+                        (12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
+                        (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)
+                    ]
+                ]
 
-            return valid_moves
-        return []
+        return valid_moves
+
     
     
     def _get_moves_in_direction(self, board, directions, max_distance=None):
@@ -142,9 +137,15 @@ class Piece:
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
             if 0 <= r < 10 and 0 <= c < 13:
-                if board[r][c] is None or (board[r][c].color != self.color and not (board[r][c].name == "Piyon\n Piyonu" and (r == 0 or r == 9))):
+                if board[r][c] is None or (board[r][c].color != self.color):
+                    # A9 ve M2'ye yalnızca doğru renkteki şah girebilir
+                    if (r, c) == (0, 1) and self.color != "WHITE":
+                        continue
+                    if (r, c) == (12, 8) and self.color != "BLACK":
+                        continue
                     moves.append((r, c))
         return moves
+
 
     def get_vezir_moves(self, board):
         directions = [(0, 1), (0, -1), (1, 0), (-1, 0)]
@@ -338,7 +339,7 @@ class CustomChessBoard:
         }
 
     def create_pieces(self):
-        # Siyah taşlar (Güncellendi)
+        # Siyah taşlar
         self.board[0][1] = Piece("Fil", "BLACK", 0, 1)
         self.board[0][3] = Piece("Deve", "BLACK", 0, 3)
         self.board[0][9] = Piece("Deve", "BLACK", 0, 9)
@@ -355,7 +356,7 @@ class CustomChessBoard:
         self.board[1][10] = Piece("At", "BLACK", 1, 10)
         self.board[1][11] = Piece("Kale", "BLACK", 1, 11)
 
-        # Siyah piyonlar (Güncellendi)
+        # Siyah piyonlar
         self.board[2][1] = Piece("Piyon\n Piyonu", "BLACK", 2, 1)
         self.board[2][2] = Piece("Savaş Motoru\n Piyonu", "BLACK", 2, 2)
         self.board[2][3] = Piece("Deve\n Piyonu", "BLACK", 2, 3)
@@ -368,7 +369,7 @@ class CustomChessBoard:
         self.board[2][10] = Piece("At\n Piyonu", "BLACK", 2, 10)
         self.board[2][11] = Piece("Kale\n Piyonu", "BLACK", 2, 11)
 
-        # Beyaz taşlar (Güncellendi)
+        # Beyaz taşlar
         self.board[9][1] = Piece("Fil", "WHITE", 9, 1)
         self.board[9][3] = Piece("Deve", "WHITE", 9, 3)
         self.board[9][9] = Piece("Deve", "WHITE", 9, 9)
@@ -385,7 +386,7 @@ class CustomChessBoard:
         self.board[8][10] = Piece("At", "WHITE", 8, 10)
         self.board[8][11] = Piece("Kale", "WHITE", 8, 11)
 
-        # Beyaz piyonlar (Güncellendi)
+        # Beyaz piyonlar
         self.board[7][1] = Piece("Piyon\n Piyonu", "WHITE", 7, 1)
         self.board[7][2] = Piece("Savaş Motoru\n Piyonu", "WHITE", 7, 2)
         self.board[7][3] = Piece("Deve\n Piyonu", "WHITE", 7, 3)
@@ -398,7 +399,7 @@ class CustomChessBoard:
         self.board[7][10] = Piece("At\n Piyonu", "WHITE", 7, 10)
         self.board[7][11] = Piece("Kale\n Piyonu", "WHITE", 7, 11)
 
-        # Savaş Motorları (Güncellendi)
+        # Savaş Motorları
         self.board[0][5] = Piece("Savaş Motoru", "BLACK", 0, 5)  # E1
         self.board[0][7] = Piece("Savaş Motoru", "BLACK", 0, 7)  # G1
         self.board[9][5] = Piece("Savaş Motoru", "WHITE", 9, 5)  # E10
@@ -464,7 +465,7 @@ class CustomChessBoard:
                             pygame.draw.circle(screen, GREEN, ((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
 
     def handle_click(self, pos):
-        col = pos[0] // SQUARE_SIZE 
+        col = pos[0] // SQUARE_SIZE
         row = pos[1] // SQUARE_SIZE
 
         if 0 <= row < 10 and 0 <= col < 13:
@@ -483,37 +484,58 @@ class CustomChessBoard:
                         self.valid_pawn_pawn_placements = []
                 # Normal taş hareketi
                 elif (row, col) in self.selected_piece.get_valid_moves(self.board) and self.selected_piece.color == self.turn:
+                    # A9 ve M2 kontrolü (sadece Şah girebilir)
                     original_piece = self.board[row][col]
                     original_row, original_col = self.selected_piece.row, self.selected_piece.col
 
-                    self.move_piece(original_row, original_col, row, col)
+                    if (row, col) == (1, 0) or (row, col) == (8, 12):  # A9 ve M2 kontrolü
+                        if self.selected_piece.name == "Şah":
+                            if (row, col) == (1, 0) and self.selected_piece.color == "WHITE" or \
+                               (row, col) == (8, 12) and self.selected_piece.color == "BLACK":
+                                self.move_piece(original_row, original_col, row, col)
+                                
+                                # Şah çekme kontrolü
+                                if self.is_check(self.turn):
+                                    self.move_piece(row, col, original_row, original_col)  # Hareketi geri al
+                                    if original_piece:  # Alınan taşı geri koy
+                                        self.board[row][col] = original_piece
+                                        original_piece.row = row
+                                        original_piece.col = col
+                                    return
+                                self.change_turn()  # Sırayı değiştir
+                                self.update_check_status()  # Şah durumunu güncelle
+                                self.selected_piece = None  # Seçimi kaldır
+                        else:  # Şah değilse bu karelere hareket edemez
+                            self.selected_piece = None
+                            return
+                    else:  # A9 veya M2 değilse
+                        self.move_piece(original_row, original_col, row, col)
 
-                    # Şah çekme kontrolü
-                    if self.is_check(self.turn):
-                        self.move_piece(row, col, original_row, original_col) # Hareketi geri al
-                        if original_piece: #Alınan taşı geri koy.
-                            self.board[row][col] = original_piece
-                            original_piece.row = row
-                            original_piece.col = col
-                        return 
-
-                    self.change_turn() # Sırayı değiştir
-                    self.update_check_status()  # Şah durumunu güncelle
-                    self.selected_piece = None #Seçimi kaldır
+                        # Şah çekme kontrolü
+                        if self.is_check(self.turn):
+                            self.move_piece(row, col, original_row, original_col)  # Hareketi geri al
+                            if original_piece:  # Alınan taşı geri koy
+                                self.board[row][col] = original_piece
+                                original_piece.row = row
+                                original_piece.col = col
+                            return
+                        self.change_turn()  # Sırayı değiştir
+                        self.update_check_status()  # Şah durumunu güncelle
+                        self.selected_piece = None  # Seçimi kaldır
 
                 # Başka bir taş seçme
                 elif clicked_piece and clicked_piece.color == self.turn and clicked_piece != self.selected_piece:
                     self.selected_piece = clicked_piece
                     self.valid_pawn_pawn_placements = []
 
-            # Yeni bir taş seçme (Piyon Piyonu veya normal taş)    
+            # Yeni bir taş seçme (Piyon Piyonu veya normal taş)
             elif clicked_piece and clicked_piece.color == self.turn:
                 if clicked_piece.name == "Piyon\n Piyonu" and clicked_piece.is_sleeping:
                     self.selected_piece = clicked_piece
                     self.highlight_pawn_pawn_placement_options(clicked_piece)
                 else:
                     self.selected_piece = clicked_piece
-                    self.valid_pawn_pawn_placements = [] 
+                    self.valid_pawn_pawn_placements = []
 
     def update_check_status(self):
         self.check["WHITE"] = self.is_check("WHITE")
@@ -600,8 +622,8 @@ class CustomChessBoard:
 
     def is_position_forking_or_trapping(self, row, col, color):
         """
-        Check if the position forks or traps important pieces.
-        Returns True if the placement threatens multiple pieces, traps a piece, or threatens a high-value piece.
+        Konumun taşları çatallayıp çatallamadığını veya tuzaklayıp tuzaklamadığını kontrol eder.
+        Yerleşim birden fazla taşı tehdit ediyorsa, bir taşı tuzağa düşürüyorsa True döndürür.
         """
         opponent_color = "BLACK" if color == "WHITE" else "WHITE"
     
