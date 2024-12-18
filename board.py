@@ -77,8 +77,13 @@ class Piece:
                         (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)
                     ]
                 ]
+            # A9 ve M2'deki taşlar ele geçirilemez
+            valid_moves = [
+                (r, c) for r, c in valid_moves
+                if not ((r, c) in [(1, 0), (8, 12)] and board[r][c] is not None)  # A9 ve M2 doluysa hareket geçersiz
+            ]
 
-        return valid_moves
+        return valid_moves  
 
     
     
@@ -636,10 +641,10 @@ class CustomChessBoard:
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
         kings_positions = []  # Şah ve Prens pozisyonlarını takip edeceğiz
         for row in range(10):
-           for col in range(13):
-               piece = self.board[row][col]
-               if piece and piece.color == color and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
-                   kings_positions.append((row, col))
+            for col in range(13):
+                piece = self.board[row][col]
+                if piece and piece.color == color and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
+                    kings_positions.append((row, col))
 
         if not kings_positions:
             return False
@@ -649,13 +654,15 @@ class CustomChessBoard:
             king_pos = kings_positions[0]
             opponent_color = "BLACK" if color == "WHITE" else "WHITE"
             for row in range(10):
-                for col in range(11):
+                for col in range(13):
                     piece = self.board[row][col]
                     if piece and piece.color == opponent_color:
                         valid_moves = piece.get_valid_moves(self.board)
-                        if king_pos in valid_moves:
+                        # A9 ve M2 kontrolü: Bu karelerde şah çekilemez
+                        if king_pos in valid_moves and king_pos not in [(1, 0), (8, 12)]:
                             return True
         return False
+
     
 
     def is_position_forking_or_trapping(self, row, col, color):
