@@ -516,36 +516,41 @@ class CustomChessBoard:
                         }
 
                         # A9 kontrolü (BEYAZ için)
-                    if (row, col) == (1, 0):
-                        if self.selected_piece.color == "WHITE": #Beyaz taş A9'a girmek istiyor
-                            # Aynı renkte tüm şahları kontrol et
-                            max_rank_king = max(
-                                (piece for row in range(10) for piece in self.board[row]
-                                 if piece and piece.color == "WHITE" and piece.name in king_hierarchy),
-                                key=lambda x: king_hierarchy.get(x.name, 0)
-                            )
-                            if self.selected_piece != max_rank_king:
-                                self.selected_piece = None
-                                return
-                        elif self.selected_piece.color == "BLACK" and self.selected_piece.name != "Maceracı Şah": #Siyah taşlardan sadece Maceracı Şah A9'a girebilir
-                            self.selected_piece = None
-                            return
+                        if (row, col) == (1, 0):
+                            if self.selected_piece.color == "WHITE": # Beyaz taş A9'a girmek istiyor
+                                # Aynı renkte tüm şahları kontrol et
+                                max_rank_king = max(
+                                    (piece for row in range(10) for piece in self.board[row]
+                                    if piece and piece.color == "WHITE" and piece.name in king_hierarchy),
+                                    key=lambda x: king_hierarchy.get(x.name, 0)
+                                )
+                                if self.selected_piece != max_rank_king:
+                                    self.selected_piece = None
+                                    return
+                            elif self.selected_piece.color == "BLACK" and self.selected_piece.name == "Maceracı Şah": # Siyah Maceracı Şah A9'a girmek istiyor
+                                # Siyah için oyunda başka şah kaldı mı kontrol et
+                                if not any(piece and piece.name in ("Şah", "Prens") and piece.color == "BLACK" for r in range(10) for piece in self.board[r]):
+                                    self.selected_piece = None
+                                    return
 
-                    # M2 kontrolü (SİYAH için)
-                    if (row, col) == (8, 12):
-                        if self.selected_piece.color == "BLACK": #Siyah taş M2'ye girmek istiyor
-                            # Aynı renkte tüm şahları kontrol et
-                            max_rank_king = max(
-                                (piece for row in range(10) for piece in self.board[row]
-                                 if piece and piece.color == "BLACK" and piece.name in king_hierarchy),
-                                key=lambda x: king_hierarchy.get(x.name, 0)
-                            )
-                            if self.selected_piece != max_rank_king:
-                                self.selected_piece = None
-                                return
-                        elif self.selected_piece.color == "WHITE" and self.selected_piece.name != "Maceracı Şah": #Beyaz taşlardan sadece Maceracı Şah M2'ye girebilir.
-                            self.selected_piece = None
-                            return
+                        # M2 kontrolü (SİYAH için)
+                        elif (row, col) == (8, 12):
+                            if self.selected_piece.color == "BLACK": # Siyah taş M2'ye girmek istiyor
+                                # Aynı renkte tüm şahları kontrol et
+                                max_rank_king = max(
+                                    (piece for row in range(10) for piece in self.board[row]
+                                    if piece and piece.color == "BLACK" and piece.name in king_hierarchy),
+                                    key=lambda x: king_hierarchy.get(x.name, 0)
+                                )
+                                if self.selected_piece != max_rank_king:
+                                    self.selected_piece = None
+                                    return
+                            elif self.selected_piece.color == "WHITE" and self.selected_piece.name == "Maceracı Şah": # Beyaz Maceracı Şah M2'ye girmek istiyor
+                                # Beyaz için oyunda başka şah kaldı mı kontrol et
+                                if not any(piece and piece.name in ("Şah", "Prens") and piece.color == "WHITE" for r in range(10) for piece in self.board[r]):
+                                    self.selected_piece = None
+                                    return
+
 
                    
                     original_piece = self.board[row][col]
