@@ -59,15 +59,22 @@ class Piece:
 
         if move_func:
             all_moves = move_func(board)
-        
-            # Şahlar için özel kontrol
-            if self.name == "Şah":
+
+            # Şahlar için özel kontrol (Maceracı Şah hariç)
+            if self.name == "Şah" or self.name == "Prens":
                 valid_moves = [
                     (r, c) for r, c in all_moves
                     if (c, r) not in [(12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
                                     (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]
                     or (c, r) in [(0, 1)] and self.color == "WHITE"  # A9 beyaz şah için açık
                     or (c, r) in [(12, 8)] and self.color == "BLACK"  # M2 siyah şah için açık
+                ]
+            # Maceracı Şah için özel kontrol
+            elif self.name == "Maceracı Şah":
+                valid_moves = [
+                    (r, c) for r, c in all_moves
+                    if (c, r) not in [(12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
+                                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]
                 ]
             else:
                 valid_moves = [
@@ -77,13 +84,7 @@ class Piece:
                         (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)
                     ]
                 ]
-            # A9 ve M2'deki taşlar ele geçirilemez
-            valid_moves = [
-                (r, c) for r, c in valid_moves
-                if not ((r, c) in [(1, 0), (8, 12)] and board[r][c] is not None)  # A9 ve M2 doluysa hareket geçersiz
-            ]
-
-        return valid_moves  
+        return valid_moves
 
     
     
@@ -156,7 +157,16 @@ class Piece:
     
 
     def get_maceracı_şah_moves(self, board):
-        return self.get_şah_moves(board)
+            
+        directions = [(dr, dc) for dr in range(-1, 2) for dc in range(-1, 2) if (dr, dc) != (0, 0)]
+        moves = []
+        for dr, dc in directions:
+            r, c = self.row + dr, self.col + dc
+            if 0 <= r < 10 and 0 <= c < 13:
+                if board[r][c] is None or (board[r][c].color != self.color):
+                    # Maceracı Şah için A9 ve M2 kontrolü yok
+                    moves.append((r, c))
+        return moves
     
 
     def get_prens_moves(self, board):
@@ -506,30 +516,38 @@ class CustomChessBoard:
                         }
 
                         # A9 kontrolü (BEYAZ için)
-                        if (row, col) == (1, 0) and self.selected_piece.color == "WHITE":
+                    if (row, col) == (1, 0):
+                        if self.selected_piece.color == "WHITE": #Beyaz taş A9'a girmek istiyor
                             # Aynı renkte tüm şahları kontrol et
                             max_rank_king = max(
-                                (piece for row in range(10) for piece in self.board[row] 
-                                if piece and piece.color == "WHITE" and piece.name in king_hierarchy),
+                                (piece for row in range(10) for piece in self.board[row]
+                                 if piece and piece.color == "WHITE" and piece.name in king_hierarchy),
                                 key=lambda x: king_hierarchy.get(x.name, 0)
                             )
                             if self.selected_piece != max_rank_king:
                                 self.selected_piece = None
                                 return
+                        elif self.selected_piece.color == "BLACK" and self.selected_piece.name != "Maceracı Şah": #Siyah taşlardan sadece Maceracı Şah A9'a girebilir
+                            self.selected_piece = None
+                            return
 
-                        # M2 kontrolü (SİYAH için)
-                        if (row, col) == (8, 12) and self.selected_piece.color == "BLACK":
+                    # M2 kontrolü (SİYAH için)
+                    if (row, col) == (8, 12):
+                        if self.selected_piece.color == "BLACK": #Siyah taş M2'ye girmek istiyor
                             # Aynı renkte tüm şahları kontrol et
                             max_rank_king = max(
-                                (piece for row in range(10) for piece in self.board[row] 
-                                if piece and piece.color == "BLACK" and piece.name in king_hierarchy),
+                                (piece for row in range(10) for piece in self.board[row]
+                                 if piece and piece.color == "BLACK" and piece.name in king_hierarchy),
                                 key=lambda x: king_hierarchy.get(x.name, 0)
                             )
                             if self.selected_piece != max_rank_king:
                                 self.selected_piece = None
                                 return
+                        elif self.selected_piece.color == "WHITE" and self.selected_piece.name != "Maceracı Şah": #Beyaz taşlardan sadece Maceracı Şah M2'ye girebilir.
+                            self.selected_piece = None
+                            return
 
-                    # Önceki hareket ve şah çekme kontrolü kodları aynı kalacak
+                   
                     original_piece = self.board[row][col]
                     original_row, original_col = self.selected_piece.row, self.selected_piece.col
 
@@ -641,10 +659,10 @@ class CustomChessBoard:
         """Belirtilen renkteki şahın tehdit altında olup olmadığını kontrol eder."""
         kings_positions = []  # Şah ve Prens pozisyonlarını takip edeceğiz
         for row in range(10):
-            for col in range(13):
-                piece = self.board[row][col]
-                if piece and piece.color == color and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
-                    kings_positions.append((row, col))
+           for col in range(13):
+               piece = self.board[row][col]
+               if piece and piece.color == color and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
+                   kings_positions.append((row, col))
 
         if not kings_positions:
             return False
@@ -654,15 +672,13 @@ class CustomChessBoard:
             king_pos = kings_positions[0]
             opponent_color = "BLACK" if color == "WHITE" else "WHITE"
             for row in range(10):
-                for col in range(13):
+                for col in range(11):
                     piece = self.board[row][col]
                     if piece and piece.color == opponent_color:
                         valid_moves = piece.get_valid_moves(self.board)
-                        # A9 ve M2 kontrolü: Bu karelerde şah çekilemez
-                        if king_pos in valid_moves and king_pos not in [(1, 0), (8, 12)]:
+                        if king_pos in valid_moves:
                             return True
         return False
-
     
 
     def is_position_forking_or_trapping(self, row, col, color):
