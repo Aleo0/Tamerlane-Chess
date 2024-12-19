@@ -19,6 +19,7 @@ DARK_BROWN = (166, 125, 92)
 GOLD = (255, 215, 0)
 GREEN = (0, 255, 0)  
 RED = (255, 0, 0)
+BLUE = (0, 0, 255)
 
 # Ekranı oluştur
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -361,6 +362,44 @@ class CustomChessBoard:
             "BLACK": (2, 6),
         }
 
+        self.has_switched = {"WHITE": False, "BLACK": False}  # Her renk için yer değiştirme yapıp yapmadığını tut
+        self.palace_entry_count = {"WHITE": 0, "BLACK": 0}  # Her renk için saraya giriş sayısı
+        self.waiting_for_palace_decision = False  # Saray kararı bekleniyor mu?
+        self.palace_decision_piece = None  # Sarayda karar verecek taş
+        self.palace_entry_options = []  # Yer değiştirebilecek şahların listesi
+
+    def show_palace_options(self, screen):
+        if self.waiting_for_palace_decision:
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(128)
+            screen.blit(overlay, (0, 0))
+
+            font = pygame.font.Font(None, 36)
+            draw_text = font.render("Sarayda ne yapmak istersiniz?", True, WHITE)
+            screen.blit(draw_text, (WIDTH // 2 - 150, HEIGHT // 2 - 100))
+
+            # Beraberlik butonu her zaman gösterilir
+            pygame.draw.rect(screen, GOLD, (WIDTH // 2 - 100, HEIGHT // 2 - 50, 200, 40))
+            draw_text = font.render("Berabere Bitir", True, BLACK)
+            screen.blit(draw_text, (WIDTH // 2 - 80, HEIGHT // 2 - 40))
+
+            # Yer değiştirme butonu sadece ilk girişte ve yer değiştirme yapılmamışsa gösterilir
+            if self.palace_entry_count[self.turn] == 1 and not self.has_switched[self.turn]:
+                pygame.draw.rect(screen, GOLD, (WIDTH // 2 - 100, HEIGHT // 2, 200, 40))
+                draw_text = font.render("Yer Değiştir", True, BLACK)
+                screen.blit(draw_text, (WIDTH // 2 - 70, HEIGHT // 2 + 10))
+
+
+
+
+
+
+
+
+
+    
+
     def create_pieces(self):
         # Siyah taşlar
         self.board[0][1] = Piece("Fil", "BLACK", 0, 1)
@@ -436,18 +475,19 @@ class CustomChessBoard:
             (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9),(0, 8)          # A sütunu engelleri
         ]
         
+        # Tahta karelerini çiz
         for row in range(10):
             for col in range(13):
                 # Kare rengi belirle
                 if (col, row) in blocked_squares:
-                    color = BLACK  # Engellenmiş kareleri siyaha boya
+                    color = BLACK
                 else:
-                    color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN  # Diğer kareleri normal renklendir
+                    color = LIGHT_BROWN if (row + col) % 2 == 0 else DARK_BROWN
 
                 # Kareyi çiz
                 pygame.draw.rect(screen, color, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE))
 
-                # Kare üzerine koordinat yazdır
+                # Koordinatları yaz
                 font = pygame.font.Font(None, 20)
                 if col > 0:
                     text = font.render(chr(ord('A') + col - 1) + str(10 - row), True, BLACK)
@@ -457,12 +497,12 @@ class CustomChessBoard:
                     text = font.render("M" + str(10 - row), True, BLACK)
                     text_rect = text.get_rect(bottomright=((col + 1) * SQUARE_SIZE, (row + 1) * SQUARE_SIZE))
                     screen.blit(text, text_rect)
-                
-                # Özel efekt çerçevesi ekle (M2 ve A9)
+
+                # Özel saray çerçeveleri
                 if (col, row) == (12, 8) or (col, row) == (0, 1):
                     pygame.draw.rect(screen, GOLD, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
-                # Taşı çiz
+                # Taşları çiz
                 piece = self.board[row][col]
                 if piece:
                     piece_color = BLACK if piece.color == "BLACK" else WHITE
@@ -474,20 +514,170 @@ class CustomChessBoard:
                             center=((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE + i * 12))
                         screen.blit(piece_text, piece_text_rect)
 
-                    # Şah durumunu kontrol et ve efekti çiz
-                    if piece and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
-                        if self.check[piece.color]:
-                            pygame.draw.rect(screen, (255, 0, 0),
-                                        (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+                # Şah durumu efekti
+                if piece and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
+                    if self.check[piece.color]:
+                        pygame.draw.rect(screen, RED, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
-                if self.selected_piece:
-                    if self.selected_piece.name == "Piyon\n Piyonu" and self.selected_piece.is_sleeping:
-                        if (row, col) in self.valid_pawn_pawn_placements:
-                            pygame.draw.circle(screen, GREEN, ((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
-                    elif (row, col) in self.selected_piece.get_valid_moves(self.board):
-                            pygame.draw.circle(screen, GREEN, ((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE), 10)
+        # Seçili taş ve geçerli hamleler
+        if self.selected_piece:
+            row, col = self.selected_piece.row, self.selected_piece.col
+            pygame.draw.rect(screen, GREEN, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+            
+            if self.selected_piece.name == "Piyon\n Piyonu" and self.selected_piece.is_sleeping:
+                for r, c in self.valid_pawn_pawn_placements:
+                    pygame.draw.circle(screen, GREEN, ((c + 0.5) * SQUARE_SIZE, (r + 0.5) * SQUARE_SIZE), 10)
+            else:
+                valid_moves = self.selected_piece.get_valid_moves(self.board)
+                for r, c in valid_moves:
+                    pygame.draw.circle(screen, GREEN, ((c + 0.5) * SQUARE_SIZE, (r + 0.5) * SQUARE_SIZE), 10)
+
+        # Yer değiştirilebilir şahları vurgula
+        for row, col in self.palace_entry_options:
+            pygame.draw.rect(screen, BLUE, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+
+        # Saray seçeneklerini göster
+        if self.waiting_for_palace_decision:
+            # Yarı saydam siyah arka plan
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(128)
+            screen.blit(overlay, (0, 0))
+
+            # Başlık
+            font = pygame.font.Font(None, 36)
+            text = font.render("Sarayda ne yapmak istersiniz?", True, WHITE)
+            text_rect = text.get_rect(center=(WIDTH//2, HEIGHT//2 - 60))
+            screen.blit(text, text_rect)
+
+            # Berabere butonu her zaman göster
+            draw_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 40)
+            pygame.draw.rect(screen, GOLD, draw_button)
+            text = font.render("Berabere Bitir", True, BLACK)
+            text_rect = text.get_rect(center=draw_button.center)
+            screen.blit(text, text_rect)
+
+            # Yer değiştirme butonu sadece ilk girişte ve daha önce yer değiştirme yapılmamışsa göster
+            if not self.has_switched[self.turn]:
+                switch_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 40)
+                pygame.draw.rect(screen, GOLD, switch_button)
+                text = font.render("Yer Değiştir", True, BLACK)
+                text_rect = text.get_rect(center=switch_button.center)
+                screen.blit(text, text_rect)
+
+
+    def handle_palace_click(self, pos):
+        if not self.waiting_for_palace_decision:
+            return False
+
+        x, y = pos
+        draw_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 50, 200, 40)
+        switch_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2, 200, 40)
+
+        # Beraberlik butonuna tıklanırsa
+        if draw_button.collidepoint(x, y):
+            print("Oyun berabere bitti!")
+            pygame.quit()
+            sys.exit()
+
+        # Yer değiştirme butonuna tıklanırsa (sadece ilk girişte geçerli)
+        if switch_button.collidepoint(x, y) and self.palace_entry_count[self.turn] == 1 and not self.has_switched[self.turn]:
+            self.waiting_for_palace_decision = False
+            self.highlight_available_kings()  # Yer değiştirme işlemini başlat
+            return True
+
+        return False
+
+
+
+
+
+
+
+
+
+
+    def highlight_available_kings(self):
+        """Yer değiştirilebilir şahları işaretle - sadece aynı renkteki şahlar"""
+        self.palace_entry_options = []
+        for row in range(10):
+            for col in range(13):
+                piece = self.board[row][col]
+                if piece and \
+                    piece.color == self.palace_decision_piece.color and \
+                    piece.name in ["Şah", "Prens", "Maceracı Şah"] and \
+                    piece != self.palace_decision_piece:  # Kendisi olmamalı
+                    self.palace_entry_options.append((row, col))
+
+
+    def handle_king_switch(self, row, col):
+        if (row, col) in self.palace_entry_options:
+            palace_king = self.palace_decision_piece
+            switch_king = self.board[row][col]
+
+            if palace_king.color != switch_king.color:
+                return False
+
+            palace_pos = (palace_king.row, palace_king.col)
+            switch_pos = (row, col)
+
+            # Yer değiştirme işlemi
+            self.board[palace_pos[0]][palace_pos[1]] = switch_king
+            self.board[switch_pos[0]][switch_pos[1]] = palace_king
+            switch_king.row, switch_king.col = palace_pos
+            palace_king.row, palace_king.col = switch_pos
+
+            # Yer değiştirme hakkı işaretlenir
+            self.has_switched[palace_king.color] = True
+
+            # Saray seçeneklerini sıfırla
+            self.palace_entry_options = []
+            self.palace_decision_piece = None
+
+            # Sırayı rakibe geçir
+            if palace_king.color == "WHITE":
+                self.turn = "BLACK"
+            else:
+                self.turn = "WHITE"
+
+            return True
+        return False
+
+
+
+
+
+
+
+
+
+
 
     def handle_click(self, pos):
+        # Saray kararı bekleniyorsa
+        if self.waiting_for_palace_decision:
+            x, y = pos
+            draw_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 40)
+            switch_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 40)
+
+            if draw_button.collidepoint(x, y):
+                print("Oyun berabere bitti!")
+                pygame.quit()
+                sys.exit()
+            elif not self.has_switched[self.turn] and switch_button.collidepoint(x, y):
+                self.waiting_for_palace_decision = False
+                self.highlight_available_kings()
+                return
+            return
+
+        # Şah yer değiştirme seçimi aktifse
+        if self.palace_entry_options:
+            col = pos[0] // SQUARE_SIZE
+            row = pos[1] // SQUARE_SIZE
+            if self.handle_king_switch(row, col):
+                return
+
+
         col = pos[0] // SQUARE_SIZE
         row = pos[1] // SQUARE_SIZE
 
@@ -603,6 +793,18 @@ class CustomChessBoard:
                     self.selected_piece = clicked_piece
                     self.valid_pawn_pawn_placements = []
 
+
+            # Yer değiştirilebilir şahları işaretle
+            for row, col in self.palace_entry_options:
+                pygame.draw.rect(screen, GREEN,
+                            (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+
+            # Saray seçeneklerini göster
+            self.show_palace_options(screen)
+
+
+        
+
     def update_check_status(self):
         self.check["WHITE"] = self.is_check("WHITE")
         self.check["BLACK"] = self.is_check("BLACK")
@@ -610,9 +812,20 @@ class CustomChessBoard:
     def change_turn(self):
         self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
 
+
     def move_piece(self, start_row, start_col, end_row, end_col):
         piece = self.board[start_row][start_col]
         if piece:
+            # Saraya giriş kontrolü
+            if piece.name in ["Şah", "Prens", "Maceracı Şah"]:
+                if (piece.color == "WHITE" and (end_row, end_col) == (1, 0)) or \
+                (piece.color == "BLACK" and (end_row, end_col) == (8, 12)):
+                    self.palace_entry_count[piece.color] += 1
+                    # Eğer yer değiştirme daha önce yapılmışsa, sadece beraberlik sunulur
+                    if not self.has_switched[piece.color]:
+                        self.waiting_for_palace_decision = True
+                        self.palace_decision_piece = piece
+
             captured_piece = self.board[end_row][end_col]
             if captured_piece:
                 self.captured_pieces[captured_piece.color].append(captured_piece)
@@ -621,6 +834,9 @@ class CustomChessBoard:
             piece.row = end_row
             piece.col = end_col
             self.board[start_row][start_col] = None
+
+
+
 
             # Tüm piyonlar için promosyon kontrolü
             if piece.name.endswith(" Piyonu") and (end_row == 0 or end_row == 9):
