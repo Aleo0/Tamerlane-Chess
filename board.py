@@ -349,6 +349,8 @@ class Piece:
 
 class CustomChessBoard:
     def __init__(self):
+        self.game_over = False
+        self.game_over_message = ""
         self.board = [[None for _ in range(13)] for _ in range(10)]
         self.selected_piece = None
         self.create_pieces()
@@ -389,14 +391,6 @@ class CustomChessBoard:
                 pygame.draw.rect(screen, GOLD, (WIDTH // 2 - 100, HEIGHT // 2, 200, 40))
                 draw_text = font.render("Yer Değiştir", True, BLACK)
                 screen.blit(draw_text, (WIDTH // 2 - 70, HEIGHT // 2 + 10))
-
-
-
-
-
-
-
-
 
     
 
@@ -474,7 +468,7 @@ class CustomChessBoard:
             (12, 0), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),(12, 1),  # M sütunu engelleri
             (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9),(0, 8)          # A sütunu engelleri
         ]
-        
+    
         # Tahta karelerini çiz
         for row in range(10):
             for col in range(13):
@@ -523,7 +517,7 @@ class CustomChessBoard:
         if self.selected_piece:
             row, col = self.selected_piece.row, self.selected_piece.col
             pygame.draw.rect(screen, GREEN, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
-            
+        
             if self.selected_piece.name == "Piyon\n Piyonu" and self.selected_piece.is_sleeping:
                 for r, c in self.valid_pawn_pawn_placements:
                     pygame.draw.circle(screen, GREEN, ((c + 0.5) * SQUARE_SIZE, (r + 0.5) * SQUARE_SIZE), 10)
@@ -536,7 +530,28 @@ class CustomChessBoard:
         for row, col in self.palace_entry_options:
             pygame.draw.rect(screen, BLUE, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
 
-        # Saray seçeneklerini göster
+        # Oyun sonu mesajı
+        if self.game_over:
+            # Yarı saydam siyah arka plan
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(128)
+            screen.blit(overlay, (0, 0))
+
+            # Mesaj kutusu
+            message_box = pygame.Rect(WIDTH//2 - 200, HEIGHT//2 - 50, 400, 100)
+            pygame.draw.rect(screen, GOLD, message_box)
+            pygame.draw.rect(screen, BLACK, message_box, 2)  # Siyah çerçeve
+
+            # Mesaj metni
+            font = pygame.font.Font(None, 36)
+            text = font.render(self.game_over_message, True, BLACK)
+            text_rect = text.get_rect(center=message_box.center)
+            screen.blit(text, text_rect)
+        
+            return  # Oyun bittiyse saray seçeneklerini gösterme
+
+        # Saray seçeneklerini göster (sadece oyun bitmemişse)
         if self.waiting_for_palace_decision:
             # Yarı saydam siyah arka plan
             overlay = pygame.Surface((WIDTH, HEIGHT))
@@ -576,9 +591,10 @@ class CustomChessBoard:
 
         # Beraberlik butonuna tıklanırsa
         if draw_button.collidepoint(x, y):
-            print("Oyun berabere bitti!")
-            pygame.quit()
-            sys.exit()
+            self.game_over = True
+            self.game_over_message = "Oyun berabere bitti!"
+            self.waiting_for_palace_decision = False
+            return True
 
         # Yer değiştirme butonuna tıklanırsa (sadece ilk girişte geçerli)
         if switch_button.collidepoint(x, y) and self.palace_entry_count[self.turn] == 1 and not self.has_switched[self.turn]:
@@ -587,11 +603,6 @@ class CustomChessBoard:
             return True
 
         return False
-
-
-
-
-
 
 
 
@@ -646,28 +657,22 @@ class CustomChessBoard:
 
 
 
-
-
-
-
-
-
-
     def handle_click(self, pos):
+        if self.game_over:
+            return
+
         # Saray kararı bekleniyorsa
         if self.waiting_for_palace_decision:
             x, y = pos
-            draw_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 - 20, 200, 40)
-            switch_button = pygame.Rect(WIDTH//2 - 100, HEIGHT//2 + 40, 200, 40)
+            draw_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 - 20, 200, 40)
+            switch_button = pygame.Rect(WIDTH // 2 - 100, HEIGHT // 2 + 40, 200, 40)
 
             if draw_button.collidepoint(x, y):
-                print("Oyun berabere bitti!")
-                pygame.quit()
-                sys.exit()
+                self.game_over = True
+                self.game_over_message = "Oyun berabere bitti!"
             elif not self.has_switched[self.turn] and switch_button.collidepoint(x, y):
                 self.waiting_for_palace_decision = False
                 self.highlight_available_kings()
-                return
             return
 
         # Şah yer değiştirme seçimi aktifse
@@ -809,8 +814,21 @@ class CustomChessBoard:
         self.check["WHITE"] = self.is_check("WHITE")
         self.check["BLACK"] = self.is_check("BLACK")
 
+
     def change_turn(self):
-        self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
+        opponent_color = "BLACK" if self.turn == "WHITE" else "WHITE"
+        if self.is_checkmate(opponent_color):
+            self.game_over = True
+            self.game_over_message = f"{self.turn} KAZANDI! Şah mat."
+            print(f"Oyun bitti: {self.game_over_message}") # Geçici print
+            return
+        elif self.is_stalemate(opponent_color):
+            self.game_over = True
+            self.game_over_message = "Oyun berabere! Çıkmaz."
+            print(f"Oyun bitti: {self.game_over_message}") # Geçici print
+            return
+        else:
+            self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
 
 
     def move_piece(self, start_row, start_col, end_row, end_col):
@@ -818,13 +836,55 @@ class CustomChessBoard:
         if piece:
             # Saraya giriş kontrolü
             if piece.name in ["Şah", "Prens", "Maceracı Şah"]:
-                if (piece.color == "WHITE" and (end_row, end_col) == (1, 0)) or \
-                (piece.color == "BLACK" and (end_row, end_col) == (8, 12)):
-                    self.palace_entry_count[piece.color] += 1
-                    # Eğer yer değiştirme daha önce yapılmışsa, sadece beraberlik sunulur
-                    if not self.has_switched[piece.color]:
-                        self.waiting_for_palace_decision = True
-                        self.palace_decision_piece = piece
+                # Beyaz şah A9'a giriyorsa
+                if piece.color == "WHITE" and (end_row, end_col) == (1, 0):
+                    # En yüksek rütbeli şah kontrolü
+                    king_hierarchy = {
+                        "Şah": 3,
+                        "Prens": 2,
+                        "Maceracı Şah": 1
+                    }
+                    max_rank_king = max(
+                        (p for row in range(10) for p in self.board[row]
+                        if p and p.color == "WHITE" and p.name in king_hierarchy),
+                        key=lambda x: king_hierarchy.get(x.name, 0)
+                    )
+                    
+                    if piece == max_rank_king:
+                        self.palace_entry_count[piece.color] += 1
+                        # İkinci giriş kontrolü
+                        if self.palace_entry_count[piece.color] == 2:
+                            self.game_over = True
+                            self.game_over_message = "En yüksek rütbeli beyaz şah A9'a ikinci kez girdi. Oyun berabere!"
+                        elif self.palace_entry_count[piece.color] == 1:
+                            # İlk girişte normal saray seçenekleri
+                            self.waiting_for_palace_decision = True
+                            self.palace_decision_piece = piece
+
+                # Siyah şah M2'ye giriyorsa
+                elif piece.color == "BLACK" and (end_row, end_col) == (8, 12):
+                    # En yüksek rütbeli şah kontrolü
+                    king_hierarchy = {
+                        "Şah": 3,
+                        "Prens": 2,
+                        "Maceracı Şah": 1
+                    }
+                    max_rank_king = max(
+                        (p for row in range(10) for p in self.board[row]
+                        if p and p.color == "BLACK" and p.name in king_hierarchy),
+                        key=lambda x: king_hierarchy.get(x.name, 0)
+                    )
+                    
+                    if piece == max_rank_king:
+                        self.palace_entry_count[piece.color] += 1
+                        # İkinci giriş kontrolü
+                        if self.palace_entry_count[piece.color] == 2:
+                            self.game_over = True
+                            self.game_over_message = "En yüksek rütbeli siyah şah M2'ye ikinci kez girdi. Oyun berabere!"
+                        elif self.palace_entry_count[piece.color] == 1:
+                            # İlk girişte normal saray seçenekleri
+                            self.waiting_for_palace_decision = True
+                            self.palace_decision_piece = piece
 
             captured_piece = self.board[end_row][end_col]
             if captured_piece:
@@ -835,9 +895,6 @@ class CustomChessBoard:
             piece.col = end_col
             self.board[start_row][start_col] = None
 
-
-
-
             # Tüm piyonlar için promosyon kontrolü
             if piece.name.endswith(" Piyonu") and (end_row == 0 or end_row == 9):
                 promoted_name = piece.promote()
@@ -847,32 +904,29 @@ class CustomChessBoard:
             # Piyon Piyonu hareket sayacı ve özel kural
             if piece.name == "Piyon\n Piyonu":
                 if end_row == 0 or end_row == 9:
-                    self.pawn_pawn_move_count[piece.color] += 1  # Hareket sayacını artır
-                    piece.pawn_pawn_journey_count += 1 #Yolculuk sayacını arttır
+                    self.pawn_pawn_move_count[piece.color] += 1
+                    piece.pawn_pawn_journey_count += 1
                     if self.pawn_pawn_move_count[piece.color] == 1:
-                        piece.is_sleeping = True  # İlk ulaşmada uyku moduna al
+                        piece.is_sleeping = True
 
                     elif self.pawn_pawn_move_count[piece.color] == 2:
                         initial_row, initial_col = self.initial_pawn_pawn_positions[piece.color]
-
-                        # Hedef karedeki taşı ele geçir (Şah hariç)
                         target_piece = self.board[initial_row][initial_col]
                         if target_piece and target_piece.name not in ("Şah", "Prens"):
                             self.captured_pieces[target_piece.color].append(target_piece)
                             self.board[initial_row][initial_col] = None
 
-                        # Piyon Piyonu'nu başlangıç konumuna taşı
-                        self.board[end_row][end_col] = None  # Eski konumdan kaldır
-                        self.board[initial_row][initial_col] = piece  # Başlangıç noktasına koy                    
+                        self.board[end_row][end_col] = None
+                        self.board[initial_row][initial_col] = piece
                         piece.row = initial_row
                         piece.col = initial_col
-                        piece.is_sleeping = False # Uyku modundan çıkar. Normal hareketine devam etsin.
+                        piece.is_sleeping = False
 
-                    elif self.pawn_pawn_move_count[piece.color] == 3: # 3. kez son sıraya ulaştığında
+                    elif self.pawn_pawn_move_count[piece.color] == 3:
                         self.board[end_row][end_col] = None
                         self.board[end_row][end_col] = Piece("Maceracı Şah", piece.color, end_row, end_col)
-                        
-            # Eğer taş Piyon Piyonu ise ve uyku modunda değilse (yani hareket ettiriliyorsa), listeden eski konumunu kaldır
+
+            # Eğer taş Piyon Piyonu ise ve uyku modunda değilse, listeden eski konumunu kaldır
             if piece.name == "Piyon\n Piyonu" and not piece.is_sleeping and (start_row, start_col) in self.pawn_pawn_placeable[piece.color]:
                 self.pawn_pawn_placeable[piece.color].remove((start_row, start_col))
 
@@ -893,7 +947,7 @@ class CustomChessBoard:
             king_pos = kings_positions[0]
             opponent_color = "BLACK" if color == "WHITE" else "WHITE"
             for row in range(10):
-                for col in range(11):
+                for col in range(13):
                     piece = self.board[row][col]
                     if piece and piece.color == opponent_color:
                         valid_moves = piece.get_valid_moves(self.board)
@@ -950,7 +1004,7 @@ class CustomChessBoard:
 
     def handle_pawn_pawn_placement(self, pos):
         """
-        Son sıraya ulaştığında Piyon Piyon'un özel yerleşimini
+        Son sıraya ulaştığında Piyon Piyon'un özel yerleşimi
         """
         col = pos[0] // SQUARE_SIZE - 1
         row = pos[1] // SQUARE_SIZE
@@ -979,7 +1033,7 @@ class CustomChessBoard:
 
 
     def place_sleeping_pawn_pawn(self, start_row, start_col, end_row, end_col):
-        """Uyuyan Piyon Piyonu'nu yerleştirir, Şah hariç diğer taşları ele geçirme özelliği eklendi."""
+        """Uyuyan Piyon Piyonu'nu yerleştirir, Şah hariç diğer taşları ele geçirebilir."""
         piece = self.board[start_row][start_col]
 
         if not piece or piece.name != "Piyon\n Piyonu" or not piece.is_sleeping:
@@ -1034,8 +1088,7 @@ class CustomChessBoard:
 
     def can_place_pawn_pawn(self, row, col, color):
         """Piyon Piyonu belirtilen konuma yerleştirilebilir mi kontrol eder."""
-       #Güvenlik kontrolüne gerek yok çünkü artık tehlikeli karelere yerleştirilebilir.
-
+       
         temp_piece = Piece("Piyon\n Piyonu", color, row, col)
         original_piece = self.board[row][col]  # Eski taşı sakla
         self.board[row][col] = temp_piece # Geçici taşı yerleştir
@@ -1145,6 +1198,52 @@ class CustomChessBoard:
                     if not (target_piece and target_piece.name in ("Şah", "Prens")) and self.is_safe(row, col, piece.color):  
                         if self.can_place_pawn_pawn(row, col, piece.color):
                            self.valid_pawn_pawn_placements.append((row, col))
+
+
+    def is_checkmate(self, color):
+        """Belirtilen rengin şah mat olup olmadığını kontrol eder."""
+        if not self.is_check(color):
+            return False
+
+        for row in range(10):
+            for col in range(13):
+                piece = self.board[row][col]
+                if piece and piece.color == color:
+                    valid_moves = piece.get_valid_moves(self.board)
+                    for move_row, move_col in valid_moves:
+                        # Hareketi geçici olarak yapıp şah durumunu kontrol et
+                        original_piece = self.board[move_row][move_col]
+                        original_row, original_col = piece.row, piece.col
+                        self.move_piece(original_row, original_col, move_row, move_col)
+                        is_still_check = self.is_check(color)
+                        # Hareketi geri al
+                        self.move_piece(move_row, move_col, original_row, original_col)
+                        self.board[move_row][move_col] = original_piece
+                        if original_piece:
+                            original_piece.row = move_row
+                            original_piece.col = move_col
+
+                        if not is_still_check:
+                            print("Kurtulma yolu bulundu") # Geçici print
+                            return False
+        print("Şah mat!") # Geçici print
+        return True
+
+    def is_stalemate(self, color):
+        """Belirtilen rengin çıkmazda olup olmadığını kontrol eder."""
+        if self.is_check(color):
+            print("Şah var") # Geçici print
+            return False
+
+        for row in range(10):
+            for col in range(13):
+                piece = self.board[row][col]
+                if piece and piece.color == color:
+                    if piece.get_valid_moves(self.board):
+                        print("Geçerli hamle bulundu") # Geçici print
+                        return False
+        print("Çıkmaz!") # Geçici print
+        return True
 
 
 
