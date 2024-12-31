@@ -1,11 +1,15 @@
 import pygame
 import sys
+import random
+import math
+import traceback
+import os
 
 
 pygame.init()
 
 # Kare boyutu
-SQUARE_SIZE = 75
+SQUARE_SIZE = 70
 
 # Ekran boyutları
 WIDTH = 13 * SQUARE_SIZE  # 11 normal kare + 1 ek kare (SOLDA) + 1 ek kare (SAĞDA)
@@ -24,6 +28,8 @@ BLUE = (0, 0, 255)
 # Ekranı oluştur
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Timur Satrancı")
+
+
 
 
 class Piece:
@@ -66,7 +72,7 @@ class Piece:
                 valid_moves = [
                     (r, c) for r, c in all_moves
                     if (c, r) not in [(12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
-                                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]
+                                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),(0, 8), (0, 9)]
                     or (c, r) in [(0, 1)] and self.color == "WHITE"  # A9 beyaz şah için açık
                     or (c, r) in [(12, 8)] and self.color == "BLACK"  # M2 siyah şah için açık
                 ]
@@ -75,16 +81,15 @@ class Piece:
                 valid_moves = [
                     (r, c) for r, c in all_moves
                     if (c, r) not in [(12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
-                                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]
+                                    (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),(0, 8), (0, 9)]
                 ]
             else:
                 valid_moves = [
                     (r, c) for r, c in all_moves
                     if (c, r) not in [
                         (12, 0), (12, 1), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),
-                        (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)
-                    ]
-                ]
+                        (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),(0, 8), (0, 9)
+                    ]]
         return valid_moves
 
     
@@ -100,7 +105,7 @@ class Piece:
                 piece = board[r][c]
                 if piece is None:
                     if (c, r) not in [(12, 0), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
-                                        (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0, 9)]:         # A sütunu engelleri
+                                        (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7),(0, 8), (0, 9)]:         # A sütunu engelleri
                         moves.append((r, c))
                     else:
                         break  # Engellenmiş kareye rastlandı, dur
@@ -120,6 +125,10 @@ class Piece:
         for dr, dc in directions:
             r, c = self.row + dr, self.col + dc
             while 0 <= r < 10 and 1 <= c < 13:
+                # M2 (8,12) kontrolü eklendi
+                if (r, c) == (8, 12):
+                    break  # M2'ye giremez, bu yöndeki hareketi durdur
+            
                 if (c, r) in [(12, 0), (12, 2), (12, 3), (12, 4), (12, 5), (12, 6), (12, 7), (12, 9),  # M sütunu engelleri
                               (0, 0), (0, 2), (0, 3), (0, 4), (0, 5), (0, 6), (0, 7), (0,8), (0, 9)]:         # A sütunu engelleri
                     break  # Engellenmiş kareye ulaşıldığında dur
@@ -303,6 +312,10 @@ class Piece:
 
         for end_r, end_c in possible_moves:
             if 0 <= end_r <= 9 and 1 <= end_c <= 12:
+                 # M2 (8,12) kontrolü eklendi
+                if (end_r, end_c) == (8, 12):
+                    continue  # M2'ye giremez
+                
                 if board[end_r][end_c] is None or (board[end_r][end_c].color != self.color and not (board[end_r][end_c].name == "Piyon\n Piyonu" and (end_r == 0 or end_r == 9))):
                     moves.append((end_r, end_c))
 
@@ -349,6 +362,8 @@ class Piece:
 
 class CustomChessBoard:
     def __init__(self):
+        self.last_move = None  # (başlangıç_satır, başlangıç_sütun, bitiş_satır, bitiş_sütun) şeklinde tuple
+        self.LAST_MOVE_COLOR = (255, 140, 0)  # Turuncu
         self.game_over = False
         self.game_over_message = ""
         self.board = [[None for _ in range(13)] for _ in range(10)]
@@ -369,6 +384,129 @@ class CustomChessBoard:
         self.waiting_for_palace_decision = False  # Saray kararı bekleniyor mu?
         self.palace_decision_piece = None  # Sarayda karar verecek taş
         self.palace_entry_options = []  # Yer değiştirebilecek şahların listesi
+
+        # Taş değerleri
+        self.piece_values = {
+            "Kale": 5.0,
+            "Savaş Motoru": 1.45,
+            "Vezir": 1.65,
+            "Deve": 2.3,
+            "Zürafa": 2.25,
+            "Fil": 1.15,
+            "At": 2.6,
+            "Gözcü": 1.2,
+            "General": 1.5,
+     
+            "Şah": 1000.0,      
+            "Prens": 900.0,    
+            "Maceracı Şah": 800.0,  
+            
+            # Piyonlar için değerler (ana taşların %60'ı)
+            "Kale Piyonu": 3.0,
+            "Savaş Motoru Piyonu": 0.87,
+            "Vezir Piyonu": 0.99,
+            "Deve Piyonu": 1.38,
+            "Zürafa Piyonu": 1.35,
+            "Fil Piyonu": 0.69,
+            "At Piyonu": 1.56,
+            "Gözcü Piyonu": 0.72,
+            "General Piyonu": 0.9,
+            "Şah Piyonu": 1.8,
+            "Piyon Piyonu": 1.3
+        }
+
+        # Taş görsellerini yükle
+        self.piece_images = {}
+        self.load_piece_images()
+
+        # Merkez kontrol matrisi ekle
+        self.center_control = [
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            [0.0, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.0],
+            [0.0, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.1, 0.0],
+            [0.0, 0.2, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.3, 0.2, 0.0],
+            [0.0, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.3, 0.2, 0.0],
+            [0.0, 0.2, 0.3, 0.4, 0.5, 0.5, 0.5, 0.5, 0.5, 0.4, 0.3, 0.2, 0.0],
+            [0.0, 0.2, 0.3, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.4, 0.3, 0.2, 0.0],
+            [0.0, 0.1, 0.2, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.3, 0.2, 0.1, 0.0],
+            [0.0, 0.1, 0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.1, 0.1, 0.0],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        ]
+
+        # Saray karelerini ayarla
+        self.center_control[1][0] = 0.8  # A9 (Siyah sarayı)
+        self.center_control[8][12] = 0.8  # M2 (Beyaz sarayı)
+
+    def load_piece_images(self):
+        try:
+            # PyInstaller ile uyumlu yol belirleme
+            if getattr(sys, 'frozen', False):
+                application_path = sys._MEIPASS
+            else:
+                application_path = os.path.dirname(os.path.abspath(__file__))
+
+            for color in ["beyaz", "siyah"]:
+                # Normal taşlar için görsel yükleme
+                piece_types = {
+                    "at": "At",
+                    "fil": "Fil",
+                    "general": "General",
+                    "gozcu": "Gözcü",
+                    "kale": "Kale",
+                    "prens": "Prens",
+                    "şah": "Şah",
+                    "savasmotoru": "Savaş Motoru",
+                    "vezir": "Vezir",
+                    "zurafa": "Zürafa",
+                    "deve": "Deve",
+                }
+
+                # Piyon türleri için görsel yükleme
+                pawn_types = {
+                    "atpiyonu": "At\n Piyonu",
+                    "filpiyonu": "Fil\n Piyonu",
+                    "generalpiyonu": "General\n Piyonu",
+                    "gozcupiyonu": "Gözcü\n Piyonu",
+                    "kalepiyonu": "Kale\n Piyonu",
+                    "prenspiyonu": "Prens\n Piyonu",
+                    "şahpiyonu": "Şah\n Piyonu",
+                    "savasmotorupiyonu": "Savaş Motoru\n Piyonu",
+                    "vezirpiyonu": "Vezir\n Piyonu",
+                    "zurafapiyonu": "Zürafa\n Piyonu",
+                    "devepiyonu": "Deve\n Piyonu",
+                    "piyonpiyonu": "Piyon\n Piyonu"
+                }
+
+                # Normal taşları yükle
+                for img_name, piece_name in piece_types.items():
+                    image_path = os.path.join(application_path, "images", f"{color}_{img_name}-Photoroom.png")
+                    
+                    if os.path.exists(image_path):
+                        image = pygame.image.load(image_path)
+                        image = pygame.transform.scale(image, (SQUARE_SIZE, SQUARE_SIZE))
+                        piece_key = f"{color}_{piece_name}"
+                        self.piece_images[piece_key] = image                  
+                    else:
+                        print(f"Dosya bulunamadı: {image_path}")
+
+                # Piyonları yükle
+                for img_name, piece_name in pawn_types.items():
+                    image_path = os.path.join(application_path, "images", f"{color}_{img_name}-photoroom.png")
+                    print(f"Yükleniyor: {image_path}")
+                    if os.path.exists(image_path):
+                        image = pygame.image.load(image_path)
+                        image = pygame.transform.scale(image, (SQUARE_SIZE, SQUARE_SIZE))
+                        piece_key = f"{color}_{piece_name}"
+                        self.piece_images[piece_key] = image
+                    else:
+                        print(f"Dosya bulunamadı: {image_path}")
+
+        except Exception as e:
+            print(f"Görsel yükleme hatası: {e}")
+            traceback.print_exc()  # Detaylı hata mesajı
+        
+        for key in self.piece_images.keys():
+            print(key)
 
     def show_palace_options(self, screen):
         if self.waiting_for_palace_decision:
@@ -461,7 +599,6 @@ class CustomChessBoard:
         self.board[9][5] = Piece("Savaş Motoru", "WHITE", 9, 5)  # E10
         self.board[9][7] = Piece("Savaş Motoru", "WHITE", 9, 7)  # G10
 
-
     def draw(self, screen):
         # Engellenmiş kareler
         blocked_squares = [
@@ -499,19 +636,47 @@ class CustomChessBoard:
                 # Taşları çiz
                 piece = self.board[row][col]
                 if piece:
-                    piece_color = BLACK if piece.color == "BLACK" else WHITE
-                    piece_font = pygame.font.Font(None, 12)
-                    lines = piece.name.splitlines()
-                    for i, line in enumerate(lines):
-                        piece_text = piece_font.render(line, True, piece_color)
-                        piece_text_rect = piece_text.get_rect(
-                            center=((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE + i * 12))
-                        screen.blit(piece_text, piece_text_rect)
+                    # Görsel anahtarını oluştur
+                    color_prefix = "beyaz" if piece.color == "WHITE" else "siyah"
+                    piece_key = f"{color_prefix}_{piece.name}"
+
+                    # Görseli çiz
+                    if piece_key in self.piece_images:
+                        image = self.piece_images[piece_key]
+                        image_rect = image.get_rect(
+                            topleft=(col * SQUARE_SIZE, row * SQUARE_SIZE)
+                        )
+                        screen.blit(image, image_rect)
+                    else:
+                        # Görsel bulunamazsa eski text-based gösterimi kullan
+                        piece_color = BLACK if piece.color == "BLACK" else WHITE
+                        piece_font = pygame.font.Font(None, 12)
+                        lines = piece.name.splitlines()
+                        for i, line in enumerate(lines):
+                            piece_text = piece_font.render(line, True, piece_color)
+                            piece_text_rect = piece_text.get_rect(
+                                center=((col + 0.5) * SQUARE_SIZE, (row + 0.5) * SQUARE_SIZE + i * 12))
+                            screen.blit(piece_text, piece_text_rect)
 
                 # Şah durumu efekti
                 if piece and (piece.name == "Şah" or piece.name == "Prens" or piece.name == "Maceracı Şah"):
                     if self.check[piece.color]:
                         pygame.draw.rect(screen, RED, (col * SQUARE_SIZE, row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 3)
+
+
+        # Son hamleyi göster (eğer varsa)
+        if self.last_move:
+            start_row, start_col, end_row, end_col = self.last_move
+            # Başlangıç karesi için belirgin çerçeve
+            pygame.draw.rect(screen, self.LAST_MOVE_COLOR, 
+                           (start_col * SQUARE_SIZE, start_row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 
+                           4)  
+            # Bitiş karesi için belirgin çerçeve
+            pygame.draw.rect(screen, self.LAST_MOVE_COLOR, 
+                           (end_col * SQUARE_SIZE, end_row * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE), 
+                           4)  
+            
+            
 
         # Seçili taş ve geçerli hamleler
         if self.selected_piece:
@@ -807,7 +972,7 @@ class CustomChessBoard:
             # Saray seçeneklerini göster
             self.show_palace_options(screen)
 
-
+            
         
 
     def update_check_status(self):
@@ -820,15 +985,16 @@ class CustomChessBoard:
         if self.is_checkmate(opponent_color):
             self.game_over = True
             self.game_over_message = f"{self.turn} KAZANDI! Şah mat."
-            print(f"Oyun bitti: {self.game_over_message}") # Geçici print
             return
         elif self.is_stalemate(opponent_color):
             self.game_over = True
             self.game_over_message = "Oyun berabere! Çıkmaz."
-            print(f"Oyun bitti: {self.game_over_message}") # Geçici print
             return
         else:
-            self.turn = "BLACK" if self.turn == "WHITE" else "WHITE"
+            self.turn = opponent_color
+            # Son hamleyi sıfırlama
+            if self.game_over:
+                self.last_move = None
 
 
     def move_piece(self, start_row, start_col, end_row, end_col):
@@ -885,15 +1051,23 @@ class CustomChessBoard:
                             # İlk girişte normal saray seçenekleri
                             self.waiting_for_palace_decision = True
                             self.palace_decision_piece = piece
+        # Taşı hareket ettir
+        piece = self.board[start_row][start_col]
+        captured_piece = self.board[end_row][end_col]
 
-            captured_piece = self.board[end_row][end_col]
-            if captured_piece:
-                self.captured_pieces[captured_piece.color].append(captured_piece)
+        if captured_piece:
+            self.captured_pieces[captured_piece.color].append(captured_piece)
 
-            self.board[end_row][end_col] = piece
-            piece.row = end_row
-            piece.col = end_col
-            self.board[start_row][start_col] = None
+        self.board[end_row][end_col] = piece
+        self.board[start_row][start_col] = None
+        piece.row = end_row
+        piece.col = end_col
+
+        # Son hamleyi kaydet
+        self.last_move = (start_row, start_col, end_row, end_col)
+        
+        # Terfi kontrolü
+        if piece.name.endswith("Piyonu"):
 
             # Tüm piyonlar için promosyon kontrolü
             if piece.name.endswith(" Piyonu") and (end_row == 0 or end_row == 9):
@@ -998,9 +1172,12 @@ class CustomChessBoard:
     
         # Yerleştirme şu durumlarda geçerlidir:
         # 1. İki taşı çatallayabileceği bir durumda veya
-        # 2. bir taş tamamen sıkışmış, kaçamaz durumdaysa
+        # 2. bir taşı tamamen sıkışmış, kaçamaz durumdaysa
         return len(threatened_pieces) > 1 or len(trapped_pieces) > 0
     
+
+
+
 
     def handle_pawn_pawn_placement(self, pos):
         """
@@ -1058,6 +1235,8 @@ class CustomChessBoard:
         return False
     
 
+
+
     def is_safe(self, row, col, color):
         """Belirtilen karenin belirtilen renk için güvenli olup olmadığını kontrol eder."""
 
@@ -1085,6 +1264,7 @@ class CustomChessBoard:
 
         return is_safe
     
+
 
     def can_place_pawn_pawn(self, row, col, color):
         """Piyon Piyonu belirtilen konuma yerleştirilebilir mi kontrol eder."""
@@ -1177,7 +1357,7 @@ class CustomChessBoard:
         for r in range(10):
             for c in range(11):
                 target_piece = self.board[r][c] #Hedeflenen taşı al
-                #Hedef taşın geçerli hamleler arasında olup olmadığını ve Şah olmadığını kontrol et
+                #Hedef taşın geçerli hamleler arasında olup olmad��ğını ve Şah olmadığını kontrol et
                 if (r, c) in valid_moves and target_piece is not None and target_piece.color == opponent_color and target_piece.name != "Şah":
                     # Aynı taşın birden fazla kez eklenmesini engelle
                     if target_piece not in forked_pieces:
@@ -1224,9 +1404,9 @@ class CustomChessBoard:
                             original_piece.col = move_col
 
                         if not is_still_check:
-                            print("Kurtulma yolu bulundu") # Geçici print
+                            print("Kurtulma yolu bulundu") 
                             return False
-        print("Şah mat!") # Geçici print
+        print("Şah mat!") 
         return True
 
     def is_stalemate(self, color):
@@ -1245,22 +1425,316 @@ class CustomChessBoard:
         print("Çıkmaz!") # Geçici print
         return True
 
+    def evaluate_position(self):
+        """Mevcut tahta pozisyonunu değerlendirir."""
+        try:
+            score = 0.0
+            
+            for row in range(10):
+                for col in range(13):
+                    piece = self.board[row][col]
+                    if piece:
+                        # Şah değerlerini dinamik olarak ayarla
+                        if piece.name in ["Şah", "Prens", "Maceracı Şah"]:
+                            king_values = self.adjust_king_values(piece.color)
+                            if isinstance(king_values, dict):
+                                piece_value = king_values.get(piece.name, 100.0)  # Varsayılan değer
+                            else:
+                                piece_value = float(king_values) if not math.isinf(king_values) else 100.0
+                        else:
+                            piece_value = float(self.piece_values.get(piece.name, 0.0))
+                        
+                        multiplier = 1.0 if piece.color == "WHITE" else -1.0
+                        position_bonus = float(self.center_control[row][col])
+                        
+                        # Sonsuz değer kontrolü
+                        if not math.isinf(piece_value):
+                            score += (piece_value + position_bonus) * multiplier
+                        else:
+                            score += 100.0 * multiplier  
+            
+            return score
+        except Exception as e:
+            print(f"Değerlendirme hatası: {e}")
+            return 0.0
+
+    def count_protecting_pieces(self, row, col, color):
+        """Belirtilen konumdaki taşı koruyan dost taşların sayısını döndürür."""
+        count = 0
+        directions = [(1,0), (-1,0), (0,1), (0,-1), (1,1), (-1,-1), (1,-1), (-1,1)]
+        
+        for dr, dc in directions:
+            r, c = row + dr, col + dc
+            if 0 <= r < 10 and 0 <= c < 13:
+                piece = self.board[r][c]
+                if piece and piece.color == color:
+                    count += 1
+        
+        return count
+
+    def minimax(self, depth, alpha, beta, maximizing_player):
+        """Minimax algoritması ile en iyi hamleyi bulur."""
+        try:
+            if depth == 0:
+                evaluation = self.evaluate_position()
+                return evaluation if not math.isnan(evaluation) else 0.0, None
+
+            current_color = "WHITE" if maximizing_player else "BLACK"
+            moves = self.get_all_valid_moves(current_color)
+            
+            if not moves:
+                return -1000.0 if maximizing_player else 1000.0, None
+
+            best_move = moves[0]
+            best_eval = float('-inf') if maximizing_player else float('inf')
+            
+            for move in moves:
+                start_pos, end_pos = move
+                captured_piece = self.make_temp_move(start_pos, end_pos)
+                
+                eval_score, _ = self.minimax(depth - 1, alpha, beta, not maximizing_player)
+                
+                # NaN kontrolü 
+                if math.isnan(eval_score):
+                    eval_score = 0.0
+                
+                if maximizing_player:
+                    if eval_score > best_eval:
+                        best_eval = eval_score
+                        best_move = move
+                    alpha = max(alpha, eval_score)
+                else:
+                    if eval_score < best_eval:
+                        best_eval = eval_score
+                        best_move = move
+                    beta = min(beta, eval_score)
+                
+                self.undo_temp_move(start_pos, end_pos, captured_piece)
+                
+                if beta <= alpha:
+                    break
+            
+            return best_eval, best_move
+            
+        except Exception as e:
+            print(f"Minimax hatası: {str(e)}")
+            return 0.0, moves[0] if moves else None
+
+    def get_all_valid_moves(self, color, verbose=False):
+        """Belirtilen renk için tüm geçerli hamleleri döndürür."""
+
+        moves = []
+        for row in range(10):
+            for col in range(13):
+                piece = self.board[row][col]
+                if piece and piece.color == color:
+                    valid_moves = piece.get_valid_moves(self.board)
+                    if valid_moves:  # Eğer geçerli hamleler varsa
+                        for end_row, end_col in valid_moves:
+                            # Hamleyi geçici olarak yap ve şah kontrolü
+                            original_piece = self.board[end_row][end_col]
+                            self.board[end_row][end_col] = piece
+                            self.board[row][col] = None
+                            piece.row, piece.col = end_row, end_col
+                            
+                            # Eğer bu hamle şah pozisyonuna yol açmıyorsa ekle
+                            if not self.is_check(color):
+                                moves.append(((row, col), (end_row, end_col)))
+                            
+                            # Hamleyi geri al
+                            self.board[row][col] = piece
+                            self.board[end_row][end_col] = original_piece
+                            piece.row, piece.col = row, col
+        
+        if verbose:
+            print(f"Renk {color} için bulunan toplam geçerli hamle sayısı: {len(moves)}")
+        return moves
+
+    def make_temp_move(self, start_pos, end_pos):
+        """Geçici hamle yapar ve alınan taşı döndürür."""
+
+        start_row, start_col = start_pos
+        end_row, end_col = end_pos
+        
+        piece = self.board[start_row][start_col]
+        captured_piece = self.board[end_row][end_col]
+        
+        self.board[end_row][end_col] = piece
+        self.board[start_row][start_col] = None
+        piece.row = end_row
+        piece.col = end_col
+        
+        return captured_piece
+
+    def undo_temp_move(self, start_pos, end_pos, captured_piece):
+        """Geçici hamleyi geri alır."""
+
+        start_row, start_col = start_pos
+        end_row, end_col = end_pos
+        
+        piece = self.board[end_row][end_col]
+        self.board[start_row][start_col] = piece
+        self.board[end_row][end_col] = captured_piece
+        
+        if piece:
+            piece.row = start_row
+            piece.col = start_col
+
+    def make_ai_move(self):
+        """AI için en iyi hamleyi yapar."""
+        print("\nAI analiz başlıyor...")
+        print(f"Sıra: {self.turn}")
+        
+        try:
+            depth = random.choice([2, 3])
+            print(f"Seçilen arama derinliği: {depth}")
+            
+            all_moves = self.get_all_valid_moves(self.turn, verbose=True)
+            
+            if not all_moves:
+                return False
+                
+            # Minimax ile en iyi hamleyi bul
+            best_eval, best_move = self.minimax(depth, float('-inf'), float('inf'), self.turn == "WHITE")
+            
+            if best_move:
+                # Her hamlenin anlık pozisyon skorunu hesapla
+                move_scores = []
+                for move in all_moves:
+                    start_pos, end_pos = move
+                    captured_piece = self.make_temp_move(start_pos, end_pos)
+                    score = self.evaluate_position()
+                    self.undo_temp_move(start_pos, end_pos, captured_piece)
+                    move_scores.append((move, score))
+                
+                # En iyi skora sahip hamleyi bul
+                best_move_score = max(move_scores, key=lambda x: x[1] if self.turn == "WHITE" else -x[1])
+                
+                # Benzer kalitede hamleleri bul
+                threshold = 0.3
+                good_moves = []
+                for move, score in move_scores:
+                    if abs(score - best_move_score[1]) <= threshold:
+                        good_moves.append(move)
+                
+                print(f"Toplam hamle sayısı: {len(all_moves)}")
+                print(f"İyi hamle sayısı: {len(good_moves)}")
+                print(f"En iyi hamle skoru: {best_move_score[1]:.2f}")
+                
+                # En iyi hamleyi seç
+                selected_move = random.choice(good_moves)
+                start_pos, end_pos = selected_move
+                
+                # Seçilen hamlenin detaylarını göster
+                piece = self.board[start_pos[0]][start_pos[1]]
+                print(f"Seçilen hamle: {piece.name} -> {chr(ord('A') + end_pos[1] - 1)}{10 - end_pos[0]}")
+                
+                # Hamleyi yap
+                self.move_piece(start_pos[0], start_pos[1], end_pos[0], end_pos[1])
+                self.turn = "WHITE" if self.turn == "BLACK" else "BLACK"
+                self.update_check_status()
+                
+                return True
+                
+        except Exception as e:
+            print(f"AI hamle hatası: {str(e)}")
+            traceback.print_exc()
+            return False
+
+    def adjust_king_values(self, color):
+        """Tahtadaki şah durumuna göre puanları ayarlar"""
+        # Tahtadaki şahları say
+        kings = {
+            "Şah": 0,
+            "Prens": 0,
+            "Maceracı Şah": 0
+        }
+        
+        # Tahtadaki şahları bul
+        for row in range(10):
+            for col in range(13):
+                piece = self.board[row][col]
+                if piece and piece.color == color and piece.name in kings:
+                    kings[piece.name] += 1
+        
+        total_kings = sum(kings.values())
+        
+        # Tek şah varsa normal değer
+        if total_kings == 1:
+            if kings["Şah"] == 1:
+                return float('inf')  
+            elif kings["Prens"] == 1:
+                return float('inf')  
+            elif kings["Maceracı Şah"] == 1:
+                return float('inf')  
+        
+        # İki şah varsa değerleri ayarla
+        elif total_kings == 2:
+            if kings["Şah"] == 1 and kings["Prens"] == 1:
+                return {
+                    "Şah": 100.0,        # Yüksek değer ama sonsuz değil
+                    "Prens": 100.0       # İkisi de eşit önemde
+                }
+            elif kings["Şah"] == 1 and kings["Maceracı Şah"] == 1:
+                return { # İkisi de eşit önemde
+                    "Şah": 100.0,       
+                    "Maceracı Şah": 100.0 
+                }
+            elif kings["Prens"] == 1 and kings["Maceracı Şah"] == 1:
+                return { # İkisi de eşit önemde
+                    "Prens": 100.0,      
+                    "Maceracı Şah": 100.0 
+                }
+        
+        # Üç şah varsa değerleri ayarla
+        elif total_kings == 3:
+            return { 
+                "Şah": 100.0,         
+                "Prens": 100.0,      
+                "Maceracı Şah": 100.0 
+            }
+        
+        return float('inf')  # Varsayılan değer
 
 
 def main():
+    from menu import Menu
+    
+    # Menüyü başlat
+    menu = Menu()
+    game_mode = menu.run()
+    
     # Satranç tahtasını oluştur
     chess_board = CustomChessBoard()
-
+    
+    # AI'ın sırası geldiğinde hamle yapması için flag
+    ai_turn = game_mode == "AI_BLACK"  # Eğer AI siyahsa, ilk hamle beyazın
+    
     # Ana oyun döngüsü
     running = True
+    clock = pygame.time.Clock()  # FPS kontrolü için
+    
     while running:
+        clock.tick(60)  # 60 FPS
+        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.MOUSEBUTTONDOWN:
-                chess_board.handle_click(event.pos)
-                chess_board.update_check_status()  # Her tıklamadan sonra şah durumunu güncelle
+                # AI'ın sırası değilse kullanıcı tıklamasını işle
+                if ((game_mode == "PVP") or 
+                    (game_mode == "AI_WHITE" and chess_board.turn == "BLACK") or 
+                    (game_mode == "AI_BLACK" and chess_board.turn == "WHITE")):
+                    chess_board.handle_click(event.pos)
+        
+        # AI'ın hamle yapması gereken durumları kontrol et
+        if not chess_board.game_over:  # Oyun devam ediyorsa
+            if ((game_mode == "AI_WHITE" and chess_board.turn == "WHITE") or 
+                (game_mode == "AI_BLACK" and chess_board.turn == "BLACK")):
+                print(f"AI hamle yapıyor... Sıra: {chess_board.turn}")  # Debug
+                chess_board.make_ai_move()
 
+        # Ekranı güncelle
         screen.fill(WHITE)
         pygame.draw.rect(screen, LIGHT_BROWN, (0, 0, WIDTH, HEIGHT))
         chess_board.draw(screen)
@@ -1271,3 +1745,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
